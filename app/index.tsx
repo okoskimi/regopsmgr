@@ -1,6 +1,16 @@
+/* eslint-disable no-console */
 import React, { Fragment } from 'react';
 import { render } from 'react-dom';
 import { AppContainer as ReactHotAppContainer } from 'react-hot-loader';
+
+import path from 'path';
+import {
+  ConfigFileMap,
+  configFiles,
+  loadSchemas,
+  SchemaMap
+} from './utils/config';
+
 import Root from './containers/Root';
 import { configureStore, history } from './store/configureStore';
 import './app.global.css';
@@ -17,3 +27,19 @@ document.addEventListener('DOMContentLoaded', () =>
     document.getElementById('root')
   )
 );
+
+console.log('Starting git part');
+configFiles(path.join(process.cwd(), '..', 'branchtest'))
+  .then((result: ConfigFileMap) => {
+    console.log('Result', result);
+    return loadSchemas(result);
+  })
+  .then((result: SchemaMap) => {
+    console.log('Schema:', result);
+    return null;
+  })
+  .catch((error: Error) => {
+    console.log('Error', error);
+    console.log('Error obj', { error });
+  });
+console.log('Git part done');
