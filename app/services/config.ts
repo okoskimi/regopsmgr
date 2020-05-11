@@ -2,20 +2,13 @@ import git, { Walker } from 'isomorphic-git';
 import fs from 'fs';
 import path from 'path';
 import YAML from 'yaml';
-
-export type ConfigFileMap = {
-  [path: string]: Buffer;
-};
-
-export type SchemaMap = {
-  [path: string]: object;
-};
+import { ConfigFileMap, ConfigContent, SchemaMap } from '../reducers/types';
 
 /*
  * Returns config file contents from <em>master</em> branch.
  */
 
-export const configFiles = async (gitPath: string): Promise<ConfigFileMap> => {
+export const getConfigFiles = async (dir: string): Promise<ConfigFileMap> => {
   /*
   git.log({fs, dir})
       .then((commits: any) => {
@@ -27,9 +20,17 @@ export const configFiles = async (gitPath: string): Promise<ConfigFileMap> => {
   const regOpsDir = '.regopsmgr';
   const pathPrefix = regOpsDir + path.sep;
 
+  /* Should we look for main dir first, or does library do it implicitly?
+   *
+  const gitroot = await git.findRoot({
+    fs,
+    filepath: dir
+  }
+  */
+
   const entryList = await git.walk({
     fs,
-    dir: gitPath,
+    dir,
     trees,
     map: async (filepath, entries) => {
       if (
@@ -46,13 +47,31 @@ export const configFiles = async (gitPath: string): Promise<ConfigFileMap> => {
       if (!tree) {
         return null;
       }
-      const content = await tree.content();
+      const binaryData = await tree.content();
+      let content: ConfigContent | null = null;
+      if (binaryData) {
+        switch (path.extname(filepath)) {
+          case '.yaml':
+          case '.yml':
+            console.log('Parsing Schema', filepath);
+            content = {
+              type: 'object',
+              content: YAML.parse(Buffer.from(binaryData).toString('utf8'))
+            };
+            break;
+          default:
+            content = {
+              type: 'binary',
+              content: binaryData
+            };
+        }
+      }
       return {
         filepath,
         type: await tree.type(),
         mode: await tree.mode(),
         oid: await tree.oid(),
-        content: content && Buffer.from(content).toString('utf8'),
+        content,
         hasStat: !!(await tree.stat())
       };
     }
@@ -69,21 +88,14 @@ export const configFiles = async (gitPath: string): Promise<ConfigFileMap> => {
   }, {});
 };
 
-export const loadSchemas = async (
-  configs: ConfigFileMap
-): Promise<SchemaMap> => {
-  const schema: SchemaMap = {};
+export const loadSchemas = (configs: ConfigFileMap): SchemaMap => {
+  const schemas: SchemaMap = {};
   const prefix = `schema${path.sep}`;
-  const extension = '.yaml';
   Object.keys(configs).forEach((filepath: string) => {
-    if (filepath.startsWith(prefix) && filepath.endsWith(extension)) {
-      const typeName = filepath.substring(
-        prefix.length,
-        filepath.length - extension.length
-      );
-      console.log('Parsing Schema', filepath);
-      schema[typeName] = YAML.parse(configs[filepath].toString());
+    if (filepath.startsWith(prefix) && configs[filepath].type === 'object') {
+      const typeName = path.basename(filepath, path.extname(filepath));
+      schemas[typeName] = configs[filepath];
     }
   });
-  return schema;
+  return schemas;
 };

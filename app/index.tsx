@@ -4,16 +4,13 @@ import { render } from 'react-dom';
 import { AppContainer as ReactHotAppContainer } from 'react-hot-loader';
 
 import path from 'path';
-import {
-  ConfigFileMap,
-  configFiles,
-  loadSchemas,
-  SchemaMap
-} from './utils/config';
+import { getConfigFiles, loadSchemas } from './services/config';
 
-import Root from './containers/Root';
+import Root from './layout/Root';
 import { configureStore, history } from './store/configureStore';
+import 'typeface-roboto';
 import './app.global.css';
+import { ConfigFileMap, SchemaMap } from './reducers/types';
 
 const store = configureStore();
 
@@ -29,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () =>
 );
 
 console.log('Starting git part');
-configFiles(path.join(process.cwd(), '..', 'branchtest'))
+getConfigFiles(path.join(process.cwd(), '..', 'branchtest'))
   .then((result: ConfigFileMap) => {
     console.log('Result', result);
     return loadSchemas(result);

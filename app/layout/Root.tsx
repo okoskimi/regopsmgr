@@ -4,7 +4,8 @@ import { ConnectedRouter } from 'connected-react-router';
 import { hot } from 'react-hot-loader/root';
 import { History } from 'history';
 import { Store } from '../reducers/types';
-import Routes from '../Routes';
+// import Routes from '../Routes';
+import Main from './Main';
 
 type Props = {
   store: Store;
@@ -14,9 +15,17 @@ type Props = {
 const Root = ({ store, history }: Props) => (
   <Provider store={store}>
     <ConnectedRouter history={history}>
-      <Routes />
+      <Main />
     </ConnectedRouter>
   </Provider>
 );
 
 export default hot(Root);
+/*
+
+    <ConnectedRouter history={history}>
+      <Routes />
+    </ConnectedRouter>
+
+
+*/

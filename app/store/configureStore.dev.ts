@@ -4,8 +4,20 @@ import { createHashHistory } from 'history';
 import { routerMiddleware, routerActions } from 'connected-react-router';
 import { createLogger } from 'redux-logger';
 import createRootReducer from '../reducers';
-import * as counterActions from '../actions/counter';
-import { counterStateType } from '../reducers/types';
+import { State } from '../reducers/types';
+
+import {
+  increment,
+  decrement,
+  incrementAsync,
+  incrementIfOdd
+} from '../reducers/counter';
+import { setConfigFiles } from '../reducers/configFiles';
+import { setSchemas } from '../reducers/schemas';
+
+const counterActions = { increment, decrement, incrementAsync, incrementIfOdd };
+const configFileActions = { setConfigFiles };
+const schemaActions = { setSchemas };
 
 declare global {
   interface Window {
@@ -25,7 +37,7 @@ const history = createHashHistory();
 
 const rootReducer = createRootReducer(history);
 
-const configureStore = (initialState?: counterStateType) => {
+const configureStore = (initialState?: State) => {
   // Redux Configuration
   const middleware = [];
   const enhancers = [];
@@ -51,6 +63,8 @@ const configureStore = (initialState?: counterStateType) => {
   // Redux DevTools Configuration
   const actionCreators = {
     ...counterActions,
+    ...configFileActions,
+    ...schemaActions,
     ...routerActions
   };
   // If Redux DevTools Extension is installed use it, otherwise use Redux compose
