@@ -4,7 +4,7 @@ import { createHashHistory } from 'history';
 import { routerMiddleware, routerActions } from 'connected-react-router';
 import { createLogger } from 'redux-logger';
 import createRootReducer from '../reducers';
-import { State } from '../reducers/types';
+import { RootState } from '../reducers/types';
 
 import {
   increment,
@@ -37,7 +37,7 @@ const history = createHashHistory();
 
 const rootReducer = createRootReducer(history);
 
-const configureStore = (initialState?: State) => {
+const configureStore = (initialState?: RootState) => {
   // Redux Configuration
   const middleware = [];
   const enhancers = [];

@@ -7,9 +7,9 @@ import {
   incrementIfOdd,
   incrementAsync
 } from '../../reducers/counter';
-import { State } from '../../reducers/types';
+import { RootState } from '../../reducers/types';
 
-const mapStateToProps = (state: State) => ({ counter: state.counter });
+const mapStateToProps = (state: RootState) => ({ counter: state.counter });
 /*
 function mapDispatchToProps(dispatch: Dispatch) {
   return bindActionCreators(

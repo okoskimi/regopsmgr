@@ -14,7 +14,7 @@ export const fileList = async (
 ): Promise<FileMap> => {
   const files = await dir.promiseFiles(filepath);
   const fileMap: FileMap = {};
-  Object.keys(schemas).forEach((type: string) => {
+  Object.keys(schemas.byName).forEach((type: string) => {
     fileMap[type] = [];
   });
   fileMap[OTHER_FILES] = [];
