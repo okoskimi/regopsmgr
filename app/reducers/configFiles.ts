@@ -2,17 +2,18 @@ import path from 'path';
 import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
 
-import { ConfigFileMap, Dispatch, RootState } from './types';
+import { ConfigFileState, Dispatch, RootState } from './types';
 import { getConfigFiles } from '../services/config';
+import { Notifier } from './notifications';
 
 interface SetConfigAction {
   type: 'SET_CONFIG_FILES';
-  payload: ConfigFileMap;
+  payload: ConfigFileState;
 }
 
 type ConfigFileAction = SetConfigAction;
 
-export function setConfigFiles(fileMap: ConfigFileMap): ConfigFileAction {
+export function setConfigFiles(fileMap: ConfigFileState): ConfigFileAction {
   return {
     type: 'SET_CONFIG_FILES',
     payload: fileMap
@@ -20,7 +21,7 @@ export function setConfigFiles(fileMap: ConfigFileMap): ConfigFileAction {
 }
 
 export const initConfigFiles = (
-  enqueueSnackbar: Function
+  notify: Notifier
 ): ThunkAction<void, RootState, unknown, Action<string>> => {
   return async (dispatch: Dispatch) => {
     try {
@@ -30,25 +31,20 @@ export const initConfigFiles = (
       );
       dispatch(setConfigFiles(configFiles));
       console.log('Loaded config files', configFiles);
-      enqueueSnackbar(
-        `Loaded ${Object.keys(configFiles).length} configuration files.`,
-        {
-          variant: 'success'
-        }
+      notify.success(
+        `Loaded ${Object.keys(configFiles).length} configuration files.`
       );
     } catch (error) {
       console.log('Unable to load config files', error);
-      enqueueSnackbar(`Unable to load config files: ${error}`, {
-        variant: 'error'
-      });
+      notify.error(`Unable to load config files: ${error}`);
     }
   };
 };
 
 const reducer = (
-  state: ConfigFileMap = {},
+  state: ConfigFileState = {},
   action: ConfigFileAction
-): ConfigFileMap => {
+): ConfigFileState => {
   switch (action.type) {
     case 'SET_CONFIG_FILES':
       return action.payload;

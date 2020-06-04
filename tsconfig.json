@@ -12,7 +12,7 @@
     "sourceMap": true,
     /* Additional Checks */
     "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedParameters": false, // this conflicts with eslint no-unused-vars
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     /* Module Resolution Options */

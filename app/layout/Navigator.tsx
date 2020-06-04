@@ -1,7 +1,10 @@
 /* eslint-disable react/jsx-props-no-spreading */
 /* eslint-disable prettier/prettier */
 import React, { forwardRef, ReactNode } from 'react';
+import { NavLink } from 'react-router-dom';
+import { connect, ConnectedProps } from 'react-redux';
 import clsx from 'clsx';
+
 import { createStyles, Theme, withStyles, WithStyles } from '@material-ui/core/styles';
 import Divider from '@material-ui/core/Divider';
 import Drawer, { DrawerProps } from '@material-ui/core/Drawer';
@@ -10,21 +13,11 @@ import List from '@material-ui/core/List';
 import ListItem from '@material-ui/core/ListItem';
 import ListItemIcon from '@material-ui/core/ListItemIcon';
 import ListItemText from '@material-ui/core/ListItemText';
-import HomeIcon from '@material-ui/icons/Home';
-import PeopleIcon from '@material-ui/icons/People';
-import DnsRoundedIcon from '@material-ui/icons/DnsRounded';
-import PermMediaOutlinedIcon from '@material-ui/icons/PhotoSizeSelectActual';
-import PublicIcon from '@material-ui/icons/Public';
-import SettingsEthernetIcon from '@material-ui/icons/SettingsEthernet';
-import SettingsInputComponentIcon from '@material-ui/icons/SettingsInputComponent';
-import TimerIcon from '@material-ui/icons/Timer';
-import SettingsIcon from '@material-ui/icons/Settings';
-import PhonelinkSetupIcon from '@material-ui/icons/PhonelinkSetup';
-import { Omit } from '@material-ui/types';
-import { NavLink } from 'react-router-dom';
-import { connect } from 'react-redux';
 
-import Paths from '../constants/paths';
+import { Omit } from '@material-ui/types';
+import SvgIcon from '@material-ui/core/SvgIcon';
+
+import { RootState } from '../reducers/types';
 
 type CustomNavProps = {
   children: ReactNode;
@@ -42,29 +35,6 @@ const CustomNavLink = forwardRef<HTMLDivElement, CustomNavProps>((props, ref) =>
 ));
 CustomNavLink.displayName = 'CustomNavLink';
 
-
-const categories = [
-  {
-    id: 'Develop',
-    children: [
-      { id: 'Authentication', route: Paths.HOME, icon: <PeopleIcon /> },
-      { id: 'Database', route: Paths.COUNTER_HOME, icon: <DnsRoundedIcon /> },
-      { id: 'Storage', route: Paths.NOT_SET, icon: <PermMediaOutlinedIcon /> },
-      { id: 'Hosting', route: Paths.NOT_SET, icon: <PublicIcon /> },
-      { id: 'Functions', route: Paths.NOT_SET, icon: <SettingsEthernetIcon /> },
-      { id: 'ML Kit', route: Paths.NOT_SET, icon: <SettingsInputComponentIcon /> },
-    ],
-  },
-  {
-    id: 'Quality',
-    children: [
-      { id: 'Analytics', route: Paths.NOT_SET, icon: <SettingsIcon /> },
-      { id: 'Performance', route: Paths.NOT_SET, icon: <TimerIcon /> },
-      { id: 'Test Lab', route: Paths.NOT_SET, icon: <PhonelinkSetupIcon /> },
-    ],
-  },
-];
-
 const styles = (theme: Theme) =>
   createStyles({
     categoryHeader: {
@@ -77,6 +47,7 @@ const styles = (theme: Theme) =>
     item: {
       paddingTop: 1,
       paddingBottom: 1,
+      borderRadius: 0,
       width: '100%',
       color: 'rgba(255, 255, 255, 0.7)',
       '&:hover': {
@@ -92,7 +63,7 @@ const styles = (theme: Theme) =>
       paddingTop: theme.spacing(2),
       paddingBottom: theme.spacing(2),
     },
-    firebase: {
+    app: {
       fontSize: 24,
       color: theme.palette.common.white,
     },
@@ -111,54 +82,68 @@ const styles = (theme: Theme) =>
     },
   });
 
-export interface NavigatorProps extends Omit<DrawerProps, 'classes'>, WithStyles<typeof styles> {
-  pathname: string;
-}
+type OwnProps = Omit<DrawerProps, 'classes'> & WithStyles<typeof styles>;
 
-function Navigator(props: NavigatorProps) {
-  const { classes, pathname, ...other } = props;
+const mapState = (state: RootState) => ({
+  pathname: state.router.location.pathname,
+  appMenu: state.appMenu
+});
+
+const mapDispatch = {};
+
+const connector = connect(mapState, mapDispatch);
+
+type Props = ConnectedProps<typeof connector> & OwnProps;
+
+function Navigator(props: Props) {
+  const { classes, pathname, appMenu, ...other } = props;
 
   return (
     <Drawer variant="permanent" {...other}>
       <List disablePadding>
-        <ListItem className={clsx(classes.firebase, classes.item, classes.itemCategory)}>
+        <ListItem className={clsx(classes.app, classes.item, classes.itemCategory)}>
           RegOpsMgr
         </ListItem>
-        <ListItem className={clsx(classes.item, classes.itemCategory)}>
+        <ListItem
+          className={clsx(classes.item, classes.itemCategory)}
+          disableGutters
+        >
           <Button
             activeClassName={classes.itemActiveItem}
             className={classes.item}
             component={CustomNavLink}
-            to={Paths.HOME}
+            to={appMenu.home.path}
           >
             <ListItemIcon className={classes.itemIcon}>
-              <HomeIcon />
+              <SvgIcon>
+                <path d={appMenu.home.icon} />
+              </SvgIcon>
             </ListItemIcon>
             <ListItemText
               classes={{
                 primary: classes.itemPrimary,
               }}
             >
-              Project Overview
+              {appMenu.home.name}
             </ListItemText>
           </Button>
         </ListItem>
-        {categories.map(({ id, children }) => (
-          <React.Fragment key={id}>
+        {appMenu.categories.map(category => (
+          <React.Fragment key={category.id}>
             <ListItem className={classes.categoryHeader}>
               <ListItemText
                 classes={{
                   primary: classes.categoryHeaderPrimary,
                 }}
               >
-                {id}
+                { category.name }
               </ListItemText>
             </ListItem>
-            {children.map(({ id: childId, route, icon }) => {
-              console.log ("Active", route === pathname, "Route", route, "Pathname", pathname);
+            {category.items.map(item => {
+              console.log ("Active", item.path === pathname, "Item path", item.path, "Pathname", pathname);
               return (
                 <ListItem
-                  key={childId}
+                  key={item.id}
                   className={classes.item}
                   disableGutters
                 >
@@ -166,15 +151,19 @@ function Navigator(props: NavigatorProps) {
                     activeClassName={classes.itemActiveItem}
                     className={classes.item}
                     component={CustomNavLink}
-                    to={route}
+                    to={item.path}
                   >
-                    <ListItemIcon className={classes.itemIcon}>{icon}</ListItemIcon>
+                    <ListItemIcon className={classes.itemIcon}>
+                      <SvgIcon>
+                        <path d={item.icon} />
+                      </SvgIcon>
+                    </ListItemIcon>
                     <ListItemText
                       classes={{
                         primary: classes.itemPrimary,
                       }}
                     >
-                      {childId}
+                      {item.name}
                     </ListItemText>
                   </Button>
                 </ListItem>
@@ -187,9 +176,4 @@ function Navigator(props: NavigatorProps) {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mapStateToProps = (state: any) => ({
-  pathname: state.router.location.pathname,
-})
-
-export default connect(mapStateToProps)(withStyles(styles)(Navigator));
+export default connector(withStyles(styles)(Navigator));

@@ -1,17 +1,18 @@
 import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
 
-import { SchemaMap, Dispatch, ConfigFileMap, RootState } from './types';
+import { SchemaState, Dispatch, ConfigFileState, RootState } from './types';
 import { loadSchemas } from '../services/config';
+import { Notifier } from './notifications';
 
 interface SetSchemaAction {
   type: 'SET_SCHEMAS';
-  payload: SchemaMap;
+  payload: SchemaState;
 }
 
 type SchemaAction = SetSchemaAction;
 
-export const setSchemas = (schemas: SchemaMap): SchemaAction => {
+export const setSchemas = (schemas: SchemaState): SchemaAction => {
   return {
     type: 'SET_SCHEMAS',
     payload: schemas
@@ -19,8 +20,8 @@ export const setSchemas = (schemas: SchemaMap): SchemaAction => {
 };
 
 export const initSchemas = (
-  configs: ConfigFileMap,
-  enqueueSnackbar: Function
+  configs: ConfigFileState,
+  notify: Notifier
 ): ThunkAction<void, RootState, unknown, Action<string>> => {
   return async (dispatch: Dispatch) => {
     if (Object.keys(configs).length === 0) {
@@ -31,22 +32,18 @@ export const initSchemas = (
       const schemas = await loadSchemas(configs);
       dispatch(setSchemas(schemas));
       console.log('Loaded schemas', schemas);
-      enqueueSnackbar(`Loaded ${Object.keys(schemas).length} schema entries.`, {
-        variant: 'success'
-      });
+      notify.success(`Loaded ${Object.keys(schemas).length} schema entries.`);
     } catch (error) {
       console.log('Unable to load schemas', error);
-      enqueueSnackbar(`Unable to load schemas: ${error}`, {
-        variant: 'error'
-      });
+      notify.error(`Unable to load schemas: ${error}`);
     }
   };
 };
 
 const reducer = (
-  state: SchemaMap = { byExtension: {}, byName: {} },
+  state: SchemaState = { byId: {}, data: [] },
   action: SchemaAction
-): SchemaMap => {
+): SchemaState => {
   switch (action.type) {
     case 'SET_SCHEMAS':
       return action.payload;

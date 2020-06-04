@@ -5,7 +5,7 @@ import counter from './counter';
 import schemas from './schemas';
 import configFiles from './configFiles';
 import notifications from './notifications';
-import categories from './categories';
+import appMenu from './appMenu';
 
 export default function createRootReducer(history: History) {
   return combineReducers({
@@ -14,6 +14,6 @@ export default function createRootReducer(history: History) {
     schemas,
     configFiles,
     notifications,
-    categories
+    appMenu
   });
 }

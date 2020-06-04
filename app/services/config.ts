@@ -3,24 +3,26 @@ import fs from 'fs';
 import path from 'path';
 import YAML from 'yaml';
 import Ajv from 'ajv';
+import { v4 as uuidv4 } from 'uuid';
 
 import {
-  ConfigFileMap,
+  ConfigFileState,
   ConfigFile,
   SchemaConfigFile,
   MainConfigFile,
-  Schema,
-  SchemaMap,
-  Category
+  SchemaState,
+  AppMenuState
 } from '../reducers/types';
 
-const ajv = new Ajv(); // options can be passed, e.g. {allErrors: true}
+// This will be reset in loadSchemas but setting it to null here
+// would make null a possible value and force code to null check everywhere
+let ajv = new Ajv(); // options can be passed, e.g. {allErrors: true}
 
 /*
  * Returns config file contents from <em>master</em> branch.
  */
 
-export const getConfigFiles = async (dir: string): Promise<ConfigFileMap> => {
+export const getConfigFiles = async (dir: string): Promise<ConfigFileState> => {
   /*
   git.log({fs, dir})
       .then((commits: any) => {
@@ -66,17 +68,25 @@ export const getConfigFiles = async (dir: string): Promise<ConfigFileMap> => {
         switch (path.extname(filepath)) {
           case '.yaml':
           case '.yml':
-            console.log('Parsing Schema', filepath);
-            if (filepath === 'config.yml') {
-              configFile = {
-                type: 'main',
-                content: YAML.parse(Buffer.from(binaryData).toString('utf8'))
-              };
-            } else {
-              configFile = {
-                type: 'schema',
-                content: YAML.parse(Buffer.from(binaryData).toString('utf8'))
-              };
+            try {
+              console.log('Parsing Schema', filepath);
+              if (filepath.substr(pathPrefix.length) === 'config.yml') {
+                configFile = {
+                  type: 'main',
+                  content: YAML.parse(Buffer.from(binaryData).toString('utf8'))
+                };
+              } else {
+                configFile = {
+                  type: 'schema',
+                  content: YAML.parse(Buffer.from(binaryData).toString('utf8'))
+                };
+              }
+            } catch (error) {
+              throw new Error(
+                `Unable to parse configuration file ${filepath}: ${error}\nBEGIN\n${Buffer.from(
+                  binaryData
+                ).toString('utf8')}\nEND`
+              );
             }
             break;
           default:
@@ -116,33 +126,23 @@ const isMain = (file: ConfigFile): file is MainConfigFile => {
   return file.type === 'main';
 };
 
-const commonMetaSchema = {
+const commonMetaSchema = ajv.compile({
   type: 'object',
   properties: {
     name: { type: 'string' },
-    extensions: {
-      oneOf: [
-        { type: 'string' },
-        {
-          type: 'array',
-          items: {
-            type: 'string'
-          }
-        }
-      ]
-    },
+    collectiveName: { type: 'string' },
+    files: { type: 'string' },
     description: { type: 'string' },
-    category: { type: 'string' },
-    menuName: { type: 'string' },
-    menuPriority: { type: 'number' },
-    menuIcon: { type: 'string' }
+    icon: { type: 'string' }
   }
-};
+});
 
+// TODO: Make type-specific schemas
 const metaSchemas: { [type: string]: Ajv.ValidateFunction } = {
-  document: ajv.compile(commonMetaSchema),
-  source: ajv.compile(commonMetaSchema),
-  object: ajv.compile(commonMetaSchema)
+  document: commonMetaSchema,
+  source: commonMetaSchema,
+  object: commonMetaSchema,
+  image: commonMetaSchema
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -150,10 +150,12 @@ const isString = (value: any): value is string => {
   return typeof value === 'string' || value instanceof String;
 };
 
-export const loadSchemas = (configs: ConfigFileMap): SchemaMap => {
-  const schemas: SchemaMap = {
-    byName: {},
-    byExtension: {}
+export const loadSchemas = (configs: ConfigFileState): SchemaState => {
+  // Reset schema instance, because added schemas cannot be updated
+  ajv = new Ajv();
+  const schemas: SchemaState = {
+    byId: {},
+    data: []
   };
   const prefix = `schema${path.sep}`;
   Object.keys(configs).forEach((filepath: string) => {
@@ -175,43 +177,44 @@ export const loadSchemas = (configs: ConfigFileMap): SchemaMap => {
       }
       // Only object schemas are used for JSON schema validation
       if (schema.type === 'object') {
-        ajv.addSchema(schema, schema.name); // Throws exception if format is wrong
+        ajv.addSchema(schema); // Throws exception if format is wrong
       }
       // At this point the schema is known to be OK, we can store it
-      schemas.byName[schema.name] = schema;
-      if (isString(schema.extensions)) {
-        schemas.byExtension[schema.extensions] = schema;
-      } else {
-        schemas.byExtension = schema.extensions.reduce(
-          (memo: Record<string, Schema>, ext: string) => ({
-            ...memo,
-            [ext]: schema
-          }),
-          {}
-        );
-      }
+      schemas.byId[schema.$id] = schema;
+      console.log(`storing schema under id ${schema.$id}`);
+      schemas.data.push(schema);
     }
   });
   return schemas;
 };
 
-const categorySchema = {
+const menuSchema = {
   type: 'object',
   properties: {
+    home: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        icon: { type: 'string' },
+        path: { type: 'string' }
+      }
+    },
     categories: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
-          name: { type: 'string' }
+          name: { type: 'string' },
+          icon: { type: 'string' },
+          path: { type: 'string' }
         }
       }
     }
   }
 };
 
-export const loadCategories = (configs: ConfigFileMap): Array<Category> => {
-  const validator = ajv.compile(categorySchema);
+export const loadAppMenu = (configs: ConfigFileState): AppMenuState => {
+  const validator = ajv.compile(menuSchema);
   const mainConfigFile = configs['config.yml'];
   if (!isMain(mainConfigFile)) {
     throw new Error('config.yml not available');
@@ -219,46 +222,27 @@ export const loadCategories = (configs: ConfigFileMap): Array<Category> => {
   const config = mainConfigFile.content;
   if (!validator(config)) {
     throw new Error(
-      `Config.yml contains invalid category information: ${validator.errors}`
+      `Config.yml contains invalid menu information: ${validator.errors}`
     );
   }
-  const categoryList: Array<Category> = [];
-  const categoryMap: Record<string, Category> = {};
-  for (let i = 0; config.categories.length; i++) {
-    const category = {
-      name: config.categories[i].name,
-      id: config.categories[i].id,
-      items: []
-    };
-    categoryList.push(category);
-    categoryMap[category.id] = category;
-  }
-  const otherCategory = {
-    name: 'Other',
-    id: 'other',
-    items: []
+  return {
+    home: {
+      name: mainConfigFile.content.home.name,
+      icon: mainConfigFile.content.home.icon,
+      path: mainConfigFile.content.home.path,
+      id: uuidv4()
+    },
+    categories: mainConfigFile.content.categories.map(category => ({
+      name: category.name,
+      id: uuidv4(),
+      items: category.items.map(item => ({
+        name: item.name,
+        icon: item.icon,
+        path: item.path,
+        id: uuidv4()
+      }))
+    }))
   };
-  categoryList.push(otherCategory);
-  categoryMap[otherCategory.id] = otherCategory;
-
-  const prefix = `schema${path.sep}`;
-  Object.keys(configs).forEach((filepath: string) => {
-    const configFile = configs[filepath];
-    if (filepath.startsWith(prefix) && isSchema(configFile)) {
-      const schema = configFile.content;
-      const category = categoryMap[schema.category] || otherCategory;
-      category.items.push({
-        name: schema.menuName,
-        icon: schema.menuIcon,
-        priority: schema.menuPriority,
-        schema
-      });
-    }
-  });
-  categoryList.forEach(category =>
-    category.items.sort((a, b) => a.priority - b.priority)
-  );
-  return categoryList;
 };
 
 export const validate = (type: string, obj: object) => {

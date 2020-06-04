@@ -1,6 +1,6 @@
 import dir from 'node-dir';
 import path from 'path';
-import { SchemaMap } from '../reducers/types';
+import { SchemaState } from '../reducers/types';
 
 export type FileMap = {
   [type: string]: string[];
@@ -10,7 +10,7 @@ export const OTHER_FILES = 'OTHER_FILES';
 
 export const fileList = async (
   filepath: string,
-  schemas: SchemaMap
+  schemas: SchemaState
 ): Promise<FileMap> => {
   const files = await dir.promiseFiles(filepath);
   const fileMap: FileMap = {};

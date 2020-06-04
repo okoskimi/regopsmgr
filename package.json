@@ -199,6 +199,7 @@
     "@types/redux-logger": "^3.0.7",
     "@types/sinon": "^7.5.2",
     "@types/tapable": "^1.0.5",
+    "@types/uuid": "^7.0.3",
     "@types/vfile-message": "^2.0.0",
     "@types/webpack": "^4.41.3",
     "@typescript-eslint/eslint-plugin": "^2.17.0",
@@ -281,6 +282,7 @@
     "ajv": "^6.12.2",
     "connected-react-router": "^6.6.1",
     "core-js": "^3.6.4",
+    "date-fns": "^2.14.0",
     "devtron": "^1.4.0",
     "electron-debug": "^3.0.1",
     "electron-log": "^4.0.6",
@@ -299,6 +301,7 @@
     "redux-thunk": "^2.3.0",
     "source-map-support": "^0.5.16",
     "typeface-roboto": "^0.0.75",
+    "uuid": "^8.0.0",
     "yaml": "^1.9.2"
   },
   "devEngines": {

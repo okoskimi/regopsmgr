@@ -1,17 +1,25 @@
 /* eslint-disable prettier/prettier */
 import React from 'react';
-import Paper from '@material-ui/core/Paper';
+// import Paper from '@material-ui/core/Paper';
+// import Drawer from '@material-ui/core/Drawer';
 import { createStyles, Theme, withStyles, WithStyles } from '@material-ui/core/styles';
-import Grid from '@material-ui/core/Grid';
+// import Grid from '@material-ui/core/Grid';
 
 import Routes from '../Routes';
 
-const styles = (theme: Theme) =>
+const styles = (_theme: Theme) =>
   createStyles({
+    content: {
+      width: '100%',
+      overflowY: 'auto',
+      height: '100%',
+      backgroundColor: 'white',
+    },
+    /*
     paper: {
       maxWidth: 936,
       margin: 'auto',
-      overflow: 'hidden',
+      overflow: 'scroll'
     },
     searchBar: {
       borderBottom: '1px solid rgba(0, 0, 0, 0.12)',
@@ -26,15 +34,24 @@ const styles = (theme: Theme) =>
       marginRight: theme.spacing(1),
     },
     contentWrapper: {
-      margin: '40px 16px',
+      margin: '20px 16px',
     },
+    */
   });
 
-export type ContentProps = WithStyles<typeof styles>
+export type Props = WithStyles<typeof styles>
 
-function Content(props: ContentProps) {
+function Content(props: Props) {
   const { classes } = props;
 
+  return (
+    <div className={classes.content}>
+      <Routes />
+    </div>
+  );
+
+
+/*
   return (
     <Paper className={classes.paper}>
       <Grid container spacing={2} alignItems="center">
@@ -44,6 +61,7 @@ function Content(props: ContentProps) {
       </Grid>
     </Paper>
   );
+  */
 }
 
 export default withStyles(styles)(Content);

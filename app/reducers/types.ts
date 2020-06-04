@@ -1,4 +1,5 @@
 import { Dispatch as ReduxDispatch, Store as ReduxStore, Action } from 'redux';
+import { RouterState } from 'connected-react-router';
 
 export interface BinaryConfigFile {
   type: 'binary';
@@ -16,53 +17,96 @@ export interface MainConfigFile {
 }
 
 export interface MainConfig {
-  categories: Array<Category>;
+  home: MenuItem;
+  categories: Array<MenuCategory>;
 }
 
 export type ConfigFile = BinaryConfigFile | SchemaConfigFile | MainConfigFile;
 
-export interface ConfigFileMap {
+export interface ConfigFileState {
   [path: string]: ConfigFile;
 }
 
 export interface Schema {
   type: string;
+  $id: string;
   name: string;
-  extensions: string | Array<string>;
+  collectiveName: string;
   description: string;
-  menuName: string;
-  menuIcon: string;
-  menuPriority: number;
-  category: string;
+  icon: string;
+  files: RegExp;
 }
 
-export interface SchemaMap {
-  byName: {
-    [name: string]: Schema;
+export interface SchemaState {
+  byId: {
+    [id: string]: Schema;
   };
-  byExtension: {
-    [ext: string]: Schema;
-  };
+  data: Array<Schema>;
 }
 
 export interface MenuItem {
   name: string;
   icon: string;
-  schema: object;
-  priority: number;
+  path: string;
+  id: string;
 }
 
-export interface Category {
+export interface MenuCategory {
   name: string;
-  id: string;
   items: Array<MenuItem>;
+  id: string;
+}
+
+export interface AppMenuState {
+  home: MenuItem;
+  categories: Array<MenuCategory>;
+}
+
+export enum NotificationType {
+  SUCCESS = 'success',
+  INFO = 'info',
+  WARN = 'warning',
+  ERROR = 'error'
+}
+
+export interface Notification {
+  type: NotificationType;
+  message: string;
+  timestamp: number;
+  id: string;
+  seen: boolean;
+}
+
+export interface NotificationState {
+  hasUnseenErrors: boolean;
+  data: Array<Notification>;
+}
+
+export interface DataFile {
+  path: string;
+  content?: object;
+  schema?: Schema;
+}
+
+export interface Directory {
+  name: string;
+  files: Array<File>;
+}
+
+export type File = DataFile | Directory;
+
+export interface FileState {
+  list: Array<File>;
+  structure: Directory;
 }
 
 export interface RootState {
+  router: RouterState;
   counter: number;
-  configFiles: ConfigFileMap;
-  schemas: SchemaMap;
-  categories: Array<Category>;
+  configFiles: ConfigFileState;
+  schemas: SchemaState;
+  appMenu: AppMenuState;
+  notifications: NotificationState;
 }
 
 export type GetState = () => RootState;

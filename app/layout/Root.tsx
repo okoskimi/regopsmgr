@@ -2,7 +2,7 @@
 /* eslint-disable react/jsx-curly-brace-presence */
 /* eslint-disable react/jsx-one-expression-per-line */
 import React from 'react';
-import { Provider } from 'react-redux';
+import { Provider, connect, ConnectedProps } from 'react-redux';
 import { ConnectedRouter } from 'connected-react-router';
 import { hot } from 'react-hot-loader/root';
 import { History } from 'history';
@@ -12,6 +12,8 @@ import { Button } from '@material-ui/core';
 
 
 import { Store } from '../reducers/types';
+import { markNotificationAsSeen as _markNotificationAsSeen } from '../reducers/notifications';
+
 import App from './App';
 
 let theme = createMuiTheme({
@@ -124,38 +126,53 @@ theme = {
   },
 };
 
-type Props = {
+// add action to all snackbars
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const notistackRef: any = React.createRef();
+const onClickDismiss = (key: string, markNotificationAsSeen: typeof _markNotificationAsSeen) => () => {
+  if (notistackRef !== null && notistackRef.current) {
+    notistackRef.current.closeSnackbar(key);
+    markNotificationAsSeen(key);
+  }
+}
+
+type OwnProps = {
   store: Store;
   history: History;
 };
 
-// add action to all snackbars
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const notistackRef: any = React.createRef();
-const onClickDismiss = (key: string) => () => {
-  if (notistackRef !== null && notistackRef.current) {
-    notistackRef.current.closeSnackbar(key);
-  }
-}
+const mapState = null;
 
-const Root = ({ store, history }: Props) => (
-  <Provider store={store}>
-    <ConnectedRouter history={history}>
-      <ThemeProvider theme={theme}>
-        <SnackbarProvider
-          maxSnack={3}
-          ref={notistackRef}
-          action={(key: string) => (
-            <Button onClick={onClickDismiss(key)}>
-                Dismiss
-            </Button>
-            )}
-        >
-          <App />
-        </SnackbarProvider>
-      </ThemeProvider>
-    </ConnectedRouter>
-  </Provider>
-);
+const mapDispatch = {
+  markNotificationAsSeen: _markNotificationAsSeen
+};
 
-export default hot(Root);
+const connector = connect(mapState, mapDispatch);
+
+type Props = ConnectedProps<typeof connector> & OwnProps;
+
+
+const Root = (props: Props) => {
+  const { store, history, markNotificationAsSeen } = props;
+  return (
+    <Provider store={store}>
+      <ConnectedRouter history={history}>
+        <ThemeProvider theme={theme}>
+          <SnackbarProvider
+            maxSnack={8}
+            ref={notistackRef}
+            action={(key: string) => (
+              <Button onClick={onClickDismiss(key, markNotificationAsSeen)}>
+                  Dismiss
+              </Button>
+              )}
+          >
+            <App />
+          </SnackbarProvider>
+        </ThemeProvider>
+      </ConnectedRouter>
+    </Provider>
+  );
+};
+
+export default hot(connector(Root));

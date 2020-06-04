@@ -2,6 +2,9 @@
 /* eslint-disable react/jsx-fragments */
 /* eslint-disable prettier/prettier */
 import React from 'react';
+import { ConnectedProps, connect } from 'react-redux';
+import { NavLink } from 'react-router-dom';
+
 import AppBar from '@material-ui/core/AppBar';
 import Avatar from '@material-ui/core/Avatar';
 // import Button from '@material-ui/core/Button';
@@ -18,6 +21,10 @@ import Toolbar from '@material-ui/core/Toolbar';
 import Tooltip from '@material-ui/core/Tooltip';
 // import Typography from '@material-ui/core/Typography';
 import { createStyles, Theme, withStyles, WithStyles } from '@material-ui/core/styles';
+
+import { RootState } from '../reducers/types';
+import Paths from '../constants/paths';
+import { markAllAsSeen as _markAllAsSeen } from '../reducers/notifications';
 
 const lightColor = 'rgba(255, 255, 255, 0.7)';
 
@@ -39,17 +46,33 @@ const styles = (theme: Theme) =>
         color: theme.palette.common.white,
       },
     },
+    activeLink: {
+      color: '#ffffff',
+    },
     button: {
       borderColor: lightColor,
     },
   });
 
-interface HeaderProps extends WithStyles<typeof styles> {
+interface OwnProps extends WithStyles<typeof styles> {
   onDrawerToggle: () => void;
 }
 
-function Header(props: HeaderProps) {
-  const { classes, onDrawerToggle } = props;
+const mapState = (state: RootState) => ({
+  notifications: state.notifications
+});
+
+const mapDispatch = {
+  markAllAsSeen: _markAllAsSeen
+};
+const connector = connect(mapState, mapDispatch);
+
+type Props = ConnectedProps<typeof connector> & OwnProps;
+
+
+
+function Header(props: Props) {
+  const { classes, onDrawerToggle, notifications, markAllAsSeen } = props;
 
   return (
     <React.Fragment>
@@ -75,15 +98,23 @@ function Header(props: HeaderProps) {
               </Link>
             </Grid>
             <Grid item>
-              <Tooltip title="Alerts • No alerts">
-                <IconButton color="inherit">
-                  <NotificationsIcon />
-                </IconButton>
+              <Tooltip title={notifications.hasUnseenErrors ? 'Alerts • NEW ALERTS' : 'Alerts • No new alerts'}>
+                <NavLink
+                  to={Paths.NOTIFICATIONS}
+                  activeClassName={classes.activeLink}
+                >
+                  <IconButton
+                    color={notifications.hasUnseenErrors ? 'secondary' : 'inherit'}
+                    onClick={()=>{ markAllAsSeen(3000)}}
+                  >
+                    <NotificationsIcon />
+                  </IconButton>
+                </NavLink>
               </Tooltip>
             </Grid>
             <Grid item>
               <IconButton color="inherit" className={classes.iconButtonAvatar}>
-                <Avatar src="/static/images/avatar/1.jpg" alt="My Avatar" />
+                <Avatar src="/remove/avatar/tag/from/Header.tsx" alt="My Avatar" />
               </IconButton>
             </Grid>
           </Grid>
@@ -94,7 +125,7 @@ function Header(props: HeaderProps) {
   );
 }
 
-export default withStyles(styles)(Header);
+export default connector(withStyles(styles)(Header));
 
 
 /*
