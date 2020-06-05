@@ -1,5 +1,19 @@
 import { Dispatch as ReduxDispatch, Store as ReduxStore, Action } from 'redux';
 import { RouterState } from 'connected-react-router';
+import { AssertionError } from 'assert';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const isString = (value: any): value is string => {
+  return typeof value === 'string' || value instanceof String;
+};
+
+export function assertIsDefined<T>(val: T): asserts val is NonNullable<T> {
+  if (val === undefined || val === null) {
+    throw new AssertionError({
+      message: `Expected 'val' to be defined, but received ${val}`
+    });
+  }
+}
 
 export interface BinaryConfigFile {
   type: 'binary';
@@ -23,6 +37,14 @@ export interface MainConfig {
 
 export type ConfigFile = BinaryConfigFile | SchemaConfigFile | MainConfigFile;
 
+export const isSchema = (file: ConfigFile): file is SchemaConfigFile => {
+  return file.type === 'schema';
+};
+
+export const isMain = (file: ConfigFile): file is MainConfigFile => {
+  return file.type === 'main';
+};
+
 export interface ConfigFileState {
   [path: string]: ConfigFile;
 }
@@ -36,6 +58,20 @@ export interface Schema {
   icon: string;
   files: RegExp;
 }
+
+export interface ObjectSchema extends Schema {
+  type: 'object';
+  properties: {
+    [name: string]: {
+      type: string;
+      [name: string]: string | object | number | boolean;
+    };
+  };
+}
+
+export const isObjectSchema = (schema: Schema): schema is ObjectSchema => {
+  return schema.type === 'object';
+};
 
 export interface SchemaState {
   byId: {
@@ -82,6 +118,10 @@ export interface NotificationState {
   data: Array<Notification>;
 }
 
+export interface DatabaseState {
+  version: number;
+}
+
 export interface DataFile {
   path: string;
   content?: object;
@@ -107,6 +147,7 @@ export interface RootState {
   schemas: SchemaState;
   appMenu: AppMenuState;
   notifications: NotificationState;
+  database: DatabaseState;
 }
 
 export type GetState = () => RootState;

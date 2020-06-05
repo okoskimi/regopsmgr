@@ -4,14 +4,17 @@ import path from 'path';
 import YAML from 'yaml';
 import Ajv from 'ajv';
 import { v4 as uuidv4 } from 'uuid';
+import produce from 'immer';
 
 import {
   ConfigFileState,
   ConfigFile,
-  SchemaConfigFile,
-  MainConfigFile,
   SchemaState,
-  AppMenuState
+  AppMenuState,
+  isSchema,
+  isString,
+  isMain,
+  isObjectSchema
 } from '../reducers/types';
 
 // This will be reset in loadSchemas but setting it to null here
@@ -118,20 +121,12 @@ export const getConfigFiles = async (dir: string): Promise<ConfigFileState> => {
   }, {});
 };
 
-const isSchema = (file: ConfigFile): file is SchemaConfigFile => {
-  return file.type === 'schema';
-};
-
-const isMain = (file: ConfigFile): file is MainConfigFile => {
-  return file.type === 'main';
-};
-
 const commonMetaSchema = ajv.compile({
   type: 'object',
   properties: {
-    name: { type: 'string' },
-    collectiveName: { type: 'string' },
-    files: { type: 'string' },
+    name: { type: 'string', minLength: 2 },
+    collectiveName: { type: 'string', minLength: 2 },
+    files: { type: 'string', minLength: 3 },
     description: { type: 'string' },
     icon: { type: 'string' }
   }
@@ -143,11 +138,6 @@ const metaSchemas: { [type: string]: Ajv.ValidateFunction } = {
   source: commonMetaSchema,
   object: commonMetaSchema,
   image: commonMetaSchema
-};
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const isString = (value: any): value is string => {
-  return typeof value === 'string' || value instanceof String;
 };
 
 export const loadSchemas = (configs: ConfigFileState): SchemaState => {
@@ -176,8 +166,64 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
         );
       }
       // Only object schemas are used for JSON schema validation
-      if (schema.type === 'object') {
-        ajv.addSchema(schema); // Throws exception if format is wrong
+      // Schemas as written have "association" types not recognized by json
+      if (isObjectSchema(schema)) {
+        const jsonSchema = produce(schema, draft => {
+          const { properties } = draft;
+
+          if (
+            'id' in properties ||
+            'shortId' in properties ||
+            'name' in properties ||
+            '_data' in properties
+          ) {
+            throw new Error(
+              `Schema ${filepath} uses reserved properties (id, shortId, name or _data)`
+            );
+          }
+          // Set reserved properties.
+          // These are all short strings that are stored in database as DataType.STRING (max 255 chars)
+          properties.id = {
+            type: 'string',
+            maxLength: 255,
+            // UUIDv4 regex
+            pattern:
+              '/^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i'
+          };
+          properties.shortId = { type: 'string', maxLength: 255 };
+          properties.name = { type: 'string', maxLength: 255 };
+
+          Object.keys(draft.properties).forEach(key => {
+            const prop = properties[key];
+            if (prop.type === 'association') {
+              if (!prop.relationship) {
+                throw new Error(
+                  `Relationship not defined for association ${key} in schema ${filepath}`
+                );
+              }
+              switch (prop.relationship) {
+                case 'belongsTo':
+                  prop.type = 'string';
+                  break;
+                // These relationships affect sequelize configuration but have no YAML serialization
+                case 'hasOne':
+                case 'hasMany':
+                  delete properties[key];
+                  break;
+                case 'belongsToMany':
+                  prop.type = 'array';
+                  prop.items = { type: 'string' };
+                  break;
+                default:
+                  throw new Error(
+                    `Unknown cardinality ${prop.cardinality} for association ${key} in schema ${filepath}`
+                  );
+              }
+            }
+          });
+        });
+        console.log('Adding schema', jsonSchema);
+        ajv.addSchema(jsonSchema); // Throws exception if format is wrong
       }
       // At this point the schema is known to be OK, we can store it
       schemas.byId[schema.$id] = schema;

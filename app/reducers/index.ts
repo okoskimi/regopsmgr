@@ -3,6 +3,7 @@ import { connectRouter } from 'connected-react-router';
 import { History } from 'history';
 import counter from './counter';
 import schemas from './schemas';
+import database from './database';
 import configFiles from './configFiles';
 import notifications from './notifications';
 import appMenu from './appMenu';
@@ -12,6 +13,7 @@ export default function createRootReducer(history: History) {
     router: connectRouter(history),
     counter,
     schemas,
+    database,
     configFiles,
     notifications,
     appMenu

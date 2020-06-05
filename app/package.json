@@ -14,5 +14,8 @@
     "postinstall": "yarn electron-rebuild"
   },
   "license": "MIT",
-  "dependencies": {}
+  "dependencies": {
+    "sequelize": "^6.0.0-beta.6",
+    "sqlite3": "^4.2.0"
+  }
 }
