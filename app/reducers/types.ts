@@ -22,7 +22,7 @@ export interface BinaryConfigFile {
 
 export interface SchemaConfigFile {
   type: 'schema';
-  content: Schema;
+  content: SchemaConfig;
 }
 
 export interface MainConfigFile {
@@ -37,25 +37,38 @@ export interface MainConfig {
 
 export type ConfigFile = BinaryConfigFile | SchemaConfigFile | MainConfigFile;
 
-export const isSchema = (file: ConfigFile): file is SchemaConfigFile => {
+export const isSchemaConfigFile = (
+  file: ConfigFile
+): file is SchemaConfigFile => {
   return file.type === 'schema';
 };
 
-export const isMain = (file: ConfigFile): file is MainConfigFile => {
+export const isMainConfigFIle = (file: ConfigFile): file is MainConfigFile => {
   return file.type === 'main';
+};
+
+export const getSchema = (config: SchemaConfig): Schema => {
+  return { ...config, files: new RegExp(config.files) };
 };
 
 export interface ConfigFileState {
   [path: string]: ConfigFile;
 }
 
-export interface Schema {
+export interface SchemaBase {
   type: string;
   $id: string;
   name: string;
   collectiveName: string;
   description: string;
   icon: string;
+}
+
+export interface SchemaConfig extends SchemaBase {
+  files: string;
+}
+
+export interface Schema extends SchemaBase {
   files: RegExp;
 }
 
@@ -122,22 +135,28 @@ export interface DatabaseState {
   version: number;
 }
 
-export interface DataFile {
+export interface File {
   path: string;
   content?: object;
   schema?: Schema;
 }
 
 export interface Directory {
-  name: string;
+  path: string;
+  subdirectories: Array<Directory>;
   files: Array<File>;
 }
 
-export type File = DataFile | Directory;
-
 export interface FileState {
   list: Array<File>;
+  filesByPath: {
+    [path: string]: File;
+  };
+  directoriesByPath: {
+    [path: string]: Directory;
+  };
   structure: Directory;
+  base: string; // The directory that contains the .git directory. All paths are relative to this.
 }
 
 export interface RootState {

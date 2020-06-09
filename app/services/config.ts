@@ -11,9 +11,10 @@ import {
   ConfigFile,
   SchemaState,
   AppMenuState,
-  isSchema,
+  isSchemaConfigFile,
+  getSchema,
   isString,
-  isMain,
+  isMainConfigFIle,
   isObjectSchema
 } from '../reducers/types';
 
@@ -140,6 +141,32 @@ const metaSchemas: { [type: string]: Ajv.ValidateFunction } = {
   image: commonMetaSchema
 };
 
+const hasAssociations = (obj: any): boolean => {
+  if (!obj) {
+    return false;
+  }
+  if (obj.type === 'association') {
+    return true;
+  }
+  if (obj.type === 'array') {
+    if (obj.items) {
+      if (hasAssociations(obj.items)) {
+        return true;
+      }
+    }
+  }
+  if (obj.type === 'object') {
+    if (obj.properties) {
+      for (const key of Object.keys(obj.properties)) {
+        if (hasAssociations(obj.properties[key])) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+};
+
 export const loadSchemas = (configs: ConfigFileState): SchemaState => {
   // Reset schema instance, because added schemas cannot be updated
   ajv = new Ajv();
@@ -150,9 +177,9 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
   const prefix = `schema${path.sep}`;
   Object.keys(configs).forEach((filepath: string) => {
     const configFile = configs[filepath];
-    if (filepath.startsWith(prefix) && isSchema(configFile)) {
+    if (filepath.startsWith(prefix) && isSchemaConfigFile(configFile)) {
       console.log('Validating schema', filepath);
-      const schema = configFile.content;
+      const schema = getSchema(configFile.content);
       if (!isString(schema.type)) {
         throw new Error(`Schema at ${filepath} has an invalid type`);
       }
@@ -203,7 +230,12 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
               }
               switch (prop.relationship) {
                 case 'belongsTo':
-                  prop.type = 'string';
+                  properties[key] = {
+                    type: 'string',
+                    // UUIDv4 regex
+                    pattern:
+                      '/^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i'
+                  };
                   break;
                 // These relationships affect sequelize configuration but have no YAML serialization
                 case 'hasOne':
@@ -211,13 +243,28 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
                   delete properties[key];
                   break;
                 case 'belongsToMany':
-                  prop.type = 'array';
-                  prop.items = { type: 'string' };
+                  properties[key] = {
+                    type: 'array',
+                    items: {
+                      type: 'string',
+                      // UUIDv4 regex
+                      pattern:
+                        '/^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i'
+                    }
+                  };
                   break;
                 default:
                   throw new Error(
                     `Unknown cardinality ${prop.cardinality} for association ${key} in schema ${filepath}`
                   );
+              }
+            }
+            // Ensure nested properties do not contain associations
+            if (prop.type === 'array' || prop.type === 'object') {
+              if (hasAssociations(prop)) {
+                throw new Error(
+                  `Nessted associations not allowed in property ${key} in schema ${filepath}`
+                );
               }
             }
           });
@@ -262,7 +309,7 @@ const menuSchema = {
 export const loadAppMenu = (configs: ConfigFileState): AppMenuState => {
   const validator = ajv.compile(menuSchema);
   const mainConfigFile = configs['config.yml'];
-  if (!isMain(mainConfigFile)) {
+  if (!isMainConfigFIle(mainConfigFile)) {
     throw new Error('config.yml not available');
   }
   const config = mainConfigFile.content;
@@ -292,5 +339,6 @@ export const loadAppMenu = (configs: ConfigFileState): AppMenuState => {
 };
 
 export const validate = (type: string, obj: object) => {
-  return ajv.validate(type, obj);
+  const success = ajv.validate(type, obj);
+  return [success, ajv.errors];
 };
