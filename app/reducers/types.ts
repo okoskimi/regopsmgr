@@ -68,6 +68,23 @@ export interface SchemaConfig extends SchemaBase {
   files: string;
 }
 
+export interface ObjectSchemaConfig extends SchemaConfig {
+  type: 'object';
+  properties: {
+    [name: string]: {
+      type: string;
+      [name: string]: string | object | number | boolean;
+    };
+  };
+  validation?: string;
+}
+
+export const isObjectSchemaConfig = (
+  schema: SchemaConfig
+): schema is ObjectSchemaConfig => {
+  return schema.type === 'object';
+};
+
 export interface Schema extends SchemaBase {
   files: RegExp;
 }
@@ -80,6 +97,7 @@ export interface ObjectSchema extends Schema {
       [name: string]: string | object | number | boolean;
     };
   };
+  validation?: string;
 }
 
 export const isObjectSchema = (schema: Schema): schema is ObjectSchema => {

@@ -129,8 +129,8 @@ export const initFiles = (
   initialFiles.length = 0;
   initialDirectories.length = 0;
   return async (dispatch: Dispatch) => {
-    if (db.version === 0) {
-      // initial call with database not yet initialized
+    if (db.version === 0 || schemas.data.length === 0) {
+      // database or schemas not yet initialized
       return;
     }
     try {

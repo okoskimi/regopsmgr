@@ -69,30 +69,36 @@ const addAssociation = (
   if (!m.associationsByName) {
     m.associationsByName = {};
   }
-  if (['hasOne', 'belongsTo'].includes(association.associationType)) {
+  if (['HasOne', 'BelongsTo'].includes(association.associationType)) {
     const initialValue: AssociationTemplate = {};
-    const template = Object.keys(association).reduce<AssociationTemplate>(
-      (obj, key) => {
-        const a = association as {
-          [key: string]: any;
+    const template = Object.getOwnPropertyNames(
+      Object.getPrototypeOf(association)
+    ).reduce<AssociationTemplate>((obj, key) => {
+      const a = association as {
+        [key: string]: any;
+      };
+      if (obj && key.startsWith('get') && typeof a[key] === 'function') {
+        return {
+          ...obj,
+          get: a[key]
         };
-        if (obj && key.startsWith('get') && typeof a[key] === 'function') {
-          return {
-            ...obj,
-            get: a[key]
-          };
-        }
-        if (obj && key.startsWith('set') && typeof a[key] === 'function') {
-          return {
-            ...obj,
-            set: a[key]
-          };
-        }
-        return obj;
-      },
-      initialValue
-    );
+      }
+      if (obj && key.startsWith('set') && typeof a[key] === 'function') {
+        return {
+          ...obj,
+          set: a[key]
+        };
+      }
+      return obj;
+    }, initialValue);
     if (!template.get || !template.set) {
+      console.log(
+        'Single-association missing accessors',
+        'Template:',
+        template,
+        'Association:',
+        association
+      );
       throw new Error(
         `Missing accessors for association ${property} in schema ${schemaName}`
       );
@@ -106,54 +112,53 @@ const addAssociation = (
       isMulti: false
     };
   } else if (
-    ['hasMany', 'belongsToMany'].includes(association.associationType)
+    ['HasMany', 'BelongsToMany'].includes(association.associationType)
   ) {
     const initialValue: AssociationTemplate = {};
-    const template = Object.keys(association).reduce<typeof initialValue>(
-      (obj, key) => {
-        const a = association as {
-          [key: string]: any;
+    const template = Object.getOwnPropertyNames(
+      Object.getPrototypeOf(association)
+    ).reduce<typeof initialValue>((obj, key) => {
+      const a = association as {
+        [key: string]: any;
+      };
+      if (obj && key.startsWith('get') && typeof a[key] === 'function') {
+        return {
+          ...obj,
+          get: a[key]
         };
-        if (obj && key.startsWith('get') && typeof a[key] === 'function') {
-          return {
-            ...obj,
-            get: a[key]
-          };
-        }
-        if (obj && key.startsWith('set') && typeof a[key] === 'function') {
-          return {
-            ...obj,
-            set: a[key]
-          };
-        }
-        if (obj && key.startsWith('add') && typeof a[key] === 'function') {
-          return {
-            ...obj,
-            add: a[key]
-          };
-        }
-        if (obj && key.startsWith('remove') && typeof a[key] === 'function') {
-          return {
-            ...obj,
-            remove: a[key]
-          };
-        }
-        if (obj && key.startsWith('count') && typeof a[key] === 'function') {
-          return {
-            ...obj,
-            count: a[key]
-          };
-        }
-        if (obj && key.startsWith('has') && typeof a[key] === 'function') {
-          return {
-            ...obj,
-            has: a[key]
-          };
-        }
-        return obj;
-      },
-      initialValue
-    );
+      }
+      if (obj && key.startsWith('set') && typeof a[key] === 'function') {
+        return {
+          ...obj,
+          set: a[key]
+        };
+      }
+      if (obj && key.startsWith('add') && typeof a[key] === 'function') {
+        return {
+          ...obj,
+          add: a[key]
+        };
+      }
+      if (obj && key.startsWith('remove') && typeof a[key] === 'function') {
+        return {
+          ...obj,
+          remove: a[key]
+        };
+      }
+      if (obj && key.startsWith('count') && typeof a[key] === 'function') {
+        return {
+          ...obj,
+          count: a[key]
+        };
+      }
+      if (obj && key.startsWith('has') && typeof a[key] === 'function') {
+        return {
+          ...obj,
+          has: a[key]
+        };
+      }
+      return obj;
+    }, initialValue);
     if (
       !template.get ||
       !template.set ||
@@ -162,6 +167,13 @@ const addAssociation = (
       !template.count ||
       !template.has
     ) {
+      console.log(
+        'Multi-association missing accessors',
+        'Template:',
+        template,
+        'Association:',
+        association
+      );
       throw new Error(
         `Missing accessors for association ${property} in schema ${schemaName}`
       );
@@ -284,9 +296,9 @@ export const initDatabase = async (configs: ConfigFileState) => {
                   `Relationship not defined for association ${key} in ${filepath}`
                 );
               }
-              if (prop.relationship === 'belongsToMany' && !prop.through) {
+              if (prop.relationship === 'BelongsToMany' && !prop.through) {
                 throw new Error(
-                  `Through not defined for belongsToMany association ${key} in ${filepath}`
+                  `Through not defined for BelongsToMany association ${key} in ${filepath}`
                 );
               }
               if (prop.index === true) {
@@ -354,28 +366,28 @@ export const initDatabase = async (configs: ConfigFileState) => {
       type: DataTypes.UUIDV4
     };
     switch (a.relationship) {
-      case 'hasOne':
+      case 'HasOne':
         addAssociation(
           a.source,
           a.name,
           database.models[a.source].hasOne(targetModel, options)
         );
         break;
-      case 'hasMany':
+      case 'HasMany':
         addAssociation(
           a.source,
           a.name,
           database.models[a.source].hasMany(targetModel, options)
         );
         break;
-      case 'belongsTo':
+      case 'BelongsTo':
         addAssociation(
           a.source,
           a.name,
           database.models[a.source].belongsTo(targetModel, options)
         );
         break;
-      case 'belongsToMany':
+      case 'BelongsToMany':
         addAssociation(
           a.source,
           a.name,

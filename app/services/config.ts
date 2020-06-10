@@ -15,7 +15,7 @@ import {
   getSchema,
   isString,
   isMainConfigFIle,
-  isObjectSchema
+  isObjectSchemaConfig
 } from '../reducers/types';
 
 // This will be reset in loadSchemas but setting it to null here
@@ -178,25 +178,35 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
   Object.keys(configs).forEach((filepath: string) => {
     const configFile = configs[filepath];
     if (filepath.startsWith(prefix) && isSchemaConfigFile(configFile)) {
-      console.log('Validating schema', filepath);
-      const schema = getSchema(configFile.content);
-      if (!isString(schema.type)) {
+      console.log('Validating schema', filepath, configFile);
+      const schemaConfig = configFile.content;
+      if (!isString(schemaConfig.type)) {
         throw new Error(`Schema at ${filepath} has an invalid type`);
       }
-      const validator = metaSchemas[schema.type];
+      const validator = metaSchemas[schemaConfig.type];
       if (!validator) {
         throw new Error(`Schema at ${filepath} has an unsupported type`);
       }
-      if (!validator(schema)) {
+      if (!validator(schemaConfig)) {
         throw new Error(
-          `Schema at ${filepath} is invalid: ${validator.errors}`
+          `Schema at ${filepath} is invalid: ${JSON.stringify(
+            validator.errors
+          )}`
         );
       }
       // Only object schemas are used for JSON schema validation
       // Schemas as written have "association" types not recognized by json
-      if (isObjectSchema(schema)) {
-        const jsonSchema = produce(schema, draft => {
+      if (isObjectSchemaConfig(schemaConfig)) {
+        console.log('This is an object schema, creating JSON schema from it');
+        const jsonSchema = produce(schemaConfig, draft => {
           const { properties } = draft;
+
+          delete draft.name;
+          delete draft.collectiveName;
+          delete draft.description;
+          delete draft.files;
+          delete draft.icon;
+          delete draft.validation;
 
           if (
             'id' in properties ||
@@ -229,7 +239,7 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
                 );
               }
               switch (prop.relationship) {
-                case 'belongsTo':
+                case 'BelongsTo':
                   properties[key] = {
                     type: 'string',
                     // UUIDv4 regex
@@ -238,11 +248,11 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
                   };
                   break;
                 // These relationships affect sequelize configuration but have no YAML serialization
-                case 'hasOne':
-                case 'hasMany':
+                case 'HasOne':
+                case 'HasMany':
                   delete properties[key];
                   break;
-                case 'belongsToMany':
+                case 'BelongsToMany':
                   properties[key] = {
                     type: 'array',
                     items: {
@@ -255,7 +265,7 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
                   break;
                 default:
                   throw new Error(
-                    `Unknown cardinality ${prop.cardinality} for association ${key} in schema ${filepath}`
+                    `Unknown relationship ${prop.relationship} for association ${key} in schema ${filepath}`
                   );
               }
             }
@@ -273,8 +283,9 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
         ajv.addSchema(jsonSchema); // Throws exception if format is wrong
       }
       // At this point the schema is known to be OK, we can store it
-      schemas.byId[schema.$id] = schema;
-      console.log(`storing schema under id ${schema.$id}`);
+      const schema = getSchema(schemaConfig); // Creates RegExp object
+      schemas.byId[schemaConfig.$id] = schema;
+      console.log(`storing schema under id ${schemaConfig.$id}`);
       schemas.data.push(schema);
     }
   });
