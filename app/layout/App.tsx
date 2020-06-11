@@ -11,6 +11,8 @@ import {
 } from '@material-ui/core/styles';
 import CssBaseline from '@material-ui/core/CssBaseline';
 import Hidden from '@material-ui/core/Hidden';
+import log from 'electron-log';
+
 // import Typography from '@material-ui/core/Typography';
 // import Link from '@material-ui/core/Link';
 
@@ -102,22 +104,22 @@ function App(props: Props) {
   const notify  = useNotification();
 
   useEffect(() => {
-    console.log('calling initConfigFiles');
+    log.info('calling initConfigFiles');
     initConfigFiles(notify);
   }, []);
 
   useEffect(() => {
-    console.log('Calling initSchemas for', configFiles);
+    log.info('Calling initSchemas for', configFiles);
     initSchemas(configFiles, notify);
-    console.log('Calling initAppMenu for', configFiles);
+    log.info('Calling initAppMenu for', configFiles);
     initAppMenu(configFiles, notify);
-    console.log('Calling initDatabase for', configFiles);
+    log.info('Calling initDatabase for', configFiles);
     initDatabase(configFiles, notify);
 
   }, [configFiles]);
 
   useEffect(() => {
-    console.log('Calling initFiles');
+    log.info('Calling initFiles');
     initFiles(database, schemas, notify);
   }, [database, schemas]);
 

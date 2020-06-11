@@ -92,7 +92,7 @@ const addAssociation = (
       return obj;
     }, initialValue);
     if (!template.get || !template.set) {
-      console.log(
+      log.info(
         'Single-association missing accessors',
         'Template:',
         template,
@@ -167,7 +167,7 @@ const addAssociation = (
       !template.count ||
       !template.has
     ) {
-      console.log(
+      log.info(
         'Multi-association missing accessors',
         'Template:',
         template,
@@ -245,6 +245,9 @@ export const initDatabase = async (configs: ConfigFileState) => {
           ]
         };
         Object.keys(schema.properties).forEach(key => {
+          if (key === 'id') {
+            return; // This was already added in model initialization
+          }
           const prop = schema.properties[key];
           assertIsDefined(modelOptions.indexes);
           switch (prop.type) {
@@ -344,7 +347,7 @@ export const initDatabase = async (configs: ConfigFileState) => {
       );
     }
     const targetModel = database.models[schemas[a.target].name];
-    console.log('Target model', targetModel);
+    log.info('Target model', targetModel);
     if (!targetModel) {
       throw new Error(
         `Target model with schema name ${

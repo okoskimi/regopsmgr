@@ -4,6 +4,7 @@ import React, { forwardRef, ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { connect, ConnectedProps } from 'react-redux';
 import clsx from 'clsx';
+import log from 'electron-log';
 
 import { createStyles, Theme, withStyles, WithStyles } from '@material-ui/core/styles';
 import Divider from '@material-ui/core/Divider';
@@ -140,7 +141,7 @@ function Navigator(props: Props) {
               </ListItemText>
             </ListItem>
             {category.items.map(item => {
-              console.log ("Active", item.path === pathname, "Item path", item.path, "Pathname", pathname);
+              log.info ("Active", item.path === pathname, "Item path", item.path, "Pathname", pathname);
               return (
                 <ListItem
                   key={item.id}

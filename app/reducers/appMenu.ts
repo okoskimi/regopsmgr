@@ -1,5 +1,6 @@
 import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
+import log from 'electron-log';
 
 import { Dispatch, ConfigFileState, RootState, AppMenuState } from './types';
 import { loadAppMenu } from '../services/config';
@@ -31,10 +32,10 @@ export const initAppMenu = (
     try {
       const appMenu = await loadAppMenu(configs);
       dispatch(setAppMenu(appMenu));
-      console.log('Loaded menu', appMenu);
+      log.info('Loaded menu', appMenu);
       notify.success(`Loaded ${appMenu.categories.length} category entries.`);
     } catch (error) {
-      console.log('Unable to load menu', error);
+      log.info('Unable to load menu', error);
       notify.error(`Unable to load menu: ${error}`);
     }
   };

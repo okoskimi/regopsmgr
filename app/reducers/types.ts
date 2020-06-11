@@ -47,10 +47,6 @@ export const isMainConfigFIle = (file: ConfigFile): file is MainConfigFile => {
   return file.type === 'main';
 };
 
-export const getSchema = (config: SchemaConfig): Schema => {
-  return { ...config, files: new RegExp(config.files) };
-};
-
 export interface ConfigFileState {
   [path: string]: ConfigFile;
 }
@@ -102,6 +98,29 @@ export interface ObjectSchema extends Schema {
 
 export const isObjectSchema = (schema: Schema): schema is ObjectSchema => {
   return schema.type === 'object';
+};
+
+export const getSchema = (config: SchemaConfig): Schema => {
+  if (isObjectSchemaConfig(config)) {
+    const os: ObjectSchema = {
+      ...config,
+      properties: {
+        ...config.properties,
+        id: {
+          type: 'string',
+          maxLength: 255,
+          // UUIDv4 regex
+          pattern:
+            '/^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i'
+        },
+        shortId: { type: 'string', maxLength: 255 },
+        name: { type: 'string', maxLength: 255 }
+      },
+      files: new RegExp(config.files)
+    };
+    return os;
+  }
+  return { ...config, files: new RegExp(config.files) };
 };
 
 export interface SchemaState {

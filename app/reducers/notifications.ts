@@ -1,7 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { useSnackbar } from 'notistack';
-
 import { useDispatch } from 'react-redux';
+import log from 'electron-log';
+
 import {
   Dispatch,
   Notification,
@@ -37,13 +38,13 @@ export const useNotification = () => {
   const notify = (variant: NotificationType, message: string) => {
     const timestamp = Date.now();
     const key = uuidv4();
-    console.log('Notifying', variant, message);
+    log.info('Notifying', variant, message);
     enqueueSnackbar(message, {
       variant,
       key,
       autoHideDuration: variant === NotificationType.ERROR ? 5000 : 3000,
       onClose: (_event, reason: string) => {
-        console.log('Got onClose for', message, 'with', reason);
+        log.info('Got onClose for', message, 'with', reason);
         dispatch({
           type: 'NEW_NOTIFICATION',
           payload: {

@@ -1,5 +1,6 @@
 import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
+import log from 'electron-log';
 
 import { DatabaseState, Dispatch, ConfigFileState, RootState } from './types';
 import { initDatabase as doInitDatabase } from '../services/database';
@@ -29,10 +30,10 @@ export const initDatabase = (
     try {
       await doInitDatabase(configs);
       dispatch(updateDatabase());
-      console.log('Initialized database');
+      log.info('Initialized database');
       notify.success(`Database initialized.`);
     } catch (error) {
-      console.log('Unable to initialize database', error);
+      log.info('Unable to initialize database', error);
       notify.error(`Unable to initialize database: ${error}`);
     }
   };

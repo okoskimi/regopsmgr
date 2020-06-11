@@ -1,5 +1,6 @@
 import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
+import log from 'electron-log';
 
 import { SchemaState, Dispatch, ConfigFileState, RootState } from './types';
 import { loadSchemas } from '../services/config';
@@ -31,10 +32,10 @@ export const initSchemas = (
     try {
       const schemas = await loadSchemas(configs);
       dispatch(setSchemas(schemas));
-      console.log('Loaded schemas', schemas);
+      log.info('Loaded schemas', schemas);
       notify.success(`Loaded ${Object.keys(schemas).length} schema entries.`);
     } catch (error) {
-      console.log('Unable to load schemas', error);
+      log.info('Unable to load schemas', error);
       notify.error(`Unable to load schemas: ${error}`);
     }
   };

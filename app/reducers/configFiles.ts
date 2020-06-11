@@ -1,6 +1,7 @@
 import path from 'path';
 import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
+import log from 'electron-log';
 
 import { ConfigFileState, Dispatch, RootState } from './types';
 import { getConfigFiles } from '../services/config';
@@ -25,17 +26,17 @@ export const initConfigFiles = (
 ): ThunkAction<void, RootState, unknown, Action<string>> => {
   return async (dispatch: Dispatch) => {
     try {
-      console.log('Loading config files');
+      log.info('Loading config files');
       const configFiles = await getConfigFiles(
         path.join(process.cwd(), '..', 'branchtest')
       );
       dispatch(setConfigFiles(configFiles));
-      console.log('Loaded config files', configFiles);
+      log.info('Loaded config files', configFiles);
       notify.success(
         `Loaded ${Object.keys(configFiles).length} configuration files.`
       );
     } catch (error) {
-      console.log('Unable to load config files', error);
+      log.info('Unable to load config files', error);
       notify.error(`Unable to load config files: ${error}`);
     }
   };

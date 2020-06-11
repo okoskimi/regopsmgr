@@ -6,6 +6,7 @@ import { promises as fsp } from 'fs';
 import YAML from 'yaml';
 import { produce } from 'immer';
 import { AssertionError } from 'assert';
+import log from 'electron-log';
 
 import {
   FileState,
@@ -48,6 +49,7 @@ let watcher: chokidar.FSWatcher | null = null;
 const loadFileToDatabase = async (path: string, schema: ObjectSchema) => {
   const contentStr = await fsp.readFile(path, { encoding: 'utf8' });
   const contentObj = YAML.parse(contentStr);
+  const jsonObj = { ...contentObj };
   const [success, errors] = validate(schema.$id, contentObj);
   if (!success) {
     throw new Error(
@@ -58,11 +60,21 @@ const loadFileToDatabase = async (path: string, schema: ObjectSchema) => {
   }
   const associations: { [x: string]: string | Array<string> } = {};
   Object.keys(contentObj).forEach(key => {
-    if (schema.properties[key].type === 'association') {
-      associations[key] = contentObj[key];
-      delete contentObj[key];
+    if (schema.properties[key]) {
+      const { type } = schema.properties[key];
+      if (type === 'association') {
+        associations[key] = contentObj[key];
+        delete contentObj[key];
+      } else if (type === 'array' || type === 'object') {
+        delete contentObj[key];
+      }
+    } else {
+      throw new Error(
+        `Undefined schema property ${key} for ${path} on schema ${schema.name}`
+      );
     }
   });
+  contentObj._data = jsonObj;
   const associationPromises: Array<Promise<void>> = [];
   const instance = await database.models[schema.name].create(contentObj);
   for (const key of Object.keys(associations)) {
@@ -129,27 +141,35 @@ export const initFiles = (
   initialFiles.length = 0;
   initialDirectories.length = 0;
   return async (dispatch: Dispatch) => {
-    if (db.version === 0 || schemas.data.length === 0) {
-      // database or schemas not yet initialized
+    if (db.version !== 1 || schemas.data.length === 0) {
+      // database not yet initialized or already done
+      // or schemas not yet initialized
       return;
     }
     try {
       watcher = chokidar.watch(rootDir, {
-        cwd: rootDir
+        cwd: rootDir,
+        ignored: /(^|[/\\])\../ // ignore dotfiles
       });
 
       watcher.on('add', async path => {
+        log.info('add', path);
         const schema = selectSchema(path, schemas);
         if (schema && isObjectSchema(schema)) {
+          log.info('Loading to database:', path, 'with schema:', schema.name);
           try {
-            const promise = loadFileToDatabase(path, schema);
+            const promise = loadFileToDatabase(
+              pathlib.join(rootDir, path),
+              schema
+            );
             if (!ready) {
               initialPromises.push(promise);
             } else {
               await promise;
+              dispatch(updateDatabase());
             }
           } catch (error) {
-            console.log(`Unable to load ${path}: ${error}`);
+            log.info(`Unable to load ${path}: ${error}`);
             notify.error(`Unable to load ${path}: ${error}`);
           }
         }
@@ -161,6 +181,7 @@ export const initFiles = (
       });
 
       watcher.on('addDir', path => {
+        log.info('addDir', path);
         if (!ready) {
           initialDirectories.push(path);
         } else {
@@ -169,25 +190,22 @@ export const initFiles = (
       });
 
       watcher.on('ready', async () => {
+        log.info('ready');
         ready = true;
         // Wait until all files have been processed before adding directory structure
         try {
           await Promise.all(initialPromises);
           dispatch(setFiles(initialFiles, initialDirectories));
           dispatch(updateDatabase());
-          console.log(`Loaded ${initialPromises.length} files to database`);
+          log.info(`Loaded ${initialPromises.length} files to database`);
           notify.success(`Loaded ${initialPromises.length} files to database`);
         } catch (error) {
-          console.log('Unable to load files', error);
+          log.info('Unable to load files', error);
           notify.error(`Unable to load files: ${error}`);
         }
       });
-
-      dispatch(updateDatabase());
-      console.log('Initialized database');
-      notify.success(`Database initialized.`);
     } catch (error) {
-      console.log('Unable to initialize files', error);
+      log.info('Unable to initialize files', error);
       notify.error(`Unable to initialize files: ${error}`);
     }
   };

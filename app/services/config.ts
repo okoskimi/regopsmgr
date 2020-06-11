@@ -5,6 +5,7 @@ import YAML from 'yaml';
 import Ajv from 'ajv';
 import { v4 as uuidv4 } from 'uuid';
 import produce from 'immer';
+import log from 'electron-log';
 
 import {
   ConfigFileState,
@@ -30,7 +31,7 @@ export const getConfigFiles = async (dir: string): Promise<ConfigFileState> => {
   /*
   git.log({fs, dir})
       .then((commits: any) => {
-          console.log(commits)
+          log.info(commits)
       })
   */
   const ref = 'master';
@@ -51,7 +52,7 @@ export const getConfigFiles = async (dir: string): Promise<ConfigFileState> => {
     dir,
     trees,
     map: async (filepath, entries) => {
-      console.log('Looking at file', filepath);
+      log.info('Looking at file', filepath);
       if (
         filepath !== '.' &&
         filepath !== regOpsDir &&
@@ -73,7 +74,7 @@ export const getConfigFiles = async (dir: string): Promise<ConfigFileState> => {
           case '.yaml':
           case '.yml':
             try {
-              console.log('Parsing Schema', filepath);
+              log.info('Parsing Schema', filepath);
               if (filepath.substr(pathPrefix.length) === 'config.yml') {
                 configFile = {
                   type: 'main',
@@ -178,7 +179,7 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
   Object.keys(configs).forEach((filepath: string) => {
     const configFile = configs[filepath];
     if (filepath.startsWith(prefix) && isSchemaConfigFile(configFile)) {
-      console.log('Validating schema', filepath, configFile);
+      log.info('Validating schema', filepath, configFile);
       const schemaConfig = configFile.content;
       if (!isString(schemaConfig.type)) {
         throw new Error(`Schema at ${filepath} has an invalid type`);
@@ -197,7 +198,7 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
       // Only object schemas are used for JSON schema validation
       // Schemas as written have "association" types not recognized by json
       if (isObjectSchemaConfig(schemaConfig)) {
-        console.log('This is an object schema, creating JSON schema from it');
+        log.info('This is an object schema, creating JSON schema from it');
         const jsonSchema = produce(schemaConfig, draft => {
           const { properties } = draft;
 
@@ -279,13 +280,13 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
             }
           });
         });
-        console.log('Adding schema', jsonSchema);
+        log.info('Adding schema', jsonSchema);
         ajv.addSchema(jsonSchema); // Throws exception if format is wrong
       }
       // At this point the schema is known to be OK, we can store it
       const schema = getSchema(schemaConfig); // Creates RegExp object
       schemas.byId[schemaConfig.$id] = schema;
-      console.log(`storing schema under id ${schemaConfig.$id}`);
+      log.info(`storing schema under id ${schemaConfig.$id}`);
       schemas.data.push(schema);
     }
   });
