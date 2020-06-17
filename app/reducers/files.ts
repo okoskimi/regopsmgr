@@ -2,26 +2,24 @@ import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
 import chokidar from 'chokidar';
 import pathlib from 'path';
-import { promises as fsp } from 'fs';
-import YAML from 'yaml';
 import { produce } from 'immer';
 import { AssertionError } from 'assert';
-import log from 'electron-log';
+import elog from 'electron-log';
 
 import {
   FileState,
   DatabaseState,
   Schema,
-  ObjectSchema,
   SchemaState,
   Dispatch,
   RootState,
   isObjectSchema
 } from './types';
 import { Notifier } from './notifications';
-import { database, setAssociation } from '../services/database';
-import { validate } from '../services/config';
 import { updateDatabase } from './database';
+import { loadFileToDatabase } from '../services/files';
+
+const log = elog.scope('reducers/files');
 
 interface FileEventAction {
   type:
@@ -45,46 +43,6 @@ interface SetFilesAction {
 type FileAction = FileEventAction | SetFilesAction;
 
 let watcher: chokidar.FSWatcher | null = null;
-
-const loadFileToDatabase = async (path: string, schema: ObjectSchema) => {
-  const contentStr = await fsp.readFile(path, { encoding: 'utf8' });
-  const contentObj = YAML.parse(contentStr);
-  const jsonObj = { ...contentObj };
-  const [success, errors] = validate(schema.$id, contentObj);
-  if (!success) {
-    throw new Error(
-      `${path} failed schema validation for ${schema.name}: ${JSON.stringify(
-        errors
-      )}`
-    );
-  }
-  const associations: { [x: string]: string | Array<string> } = {};
-  Object.keys(contentObj).forEach(key => {
-    if (schema.properties[key]) {
-      const { type } = schema.properties[key];
-      if (type === 'association') {
-        associations[key] = contentObj[key];
-        delete contentObj[key];
-      } else if (type === 'array' || type === 'object') {
-        delete contentObj[key];
-      }
-    } else {
-      throw new Error(
-        `Undefined schema property ${key} for ${path} on schema ${schema.name}`
-      );
-    }
-  });
-  contentObj._data = jsonObj;
-  const associationPromises: Array<Promise<void>> = [];
-  const instance = await database.models[schema.name].create(contentObj);
-  for (const key of Object.keys(associations)) {
-    const association = associations[key];
-    associationPromises.push(
-      setAssociation(schema, instance, key, association)
-    );
-  }
-  await Promise.all(associationPromises);
-};
 
 export const setFiles = (
   files: FileList,
@@ -160,6 +118,7 @@ export const initFiles = (
           try {
             const promise = loadFileToDatabase(
               pathlib.join(rootDir, path),
+              rootDir,
               schema
             );
             if (!ready) {

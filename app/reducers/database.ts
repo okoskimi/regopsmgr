@@ -1,10 +1,12 @@
 import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
-import log from 'electron-log';
+import elog from 'electron-log';
 
 import { DatabaseState, Dispatch, ConfigFileState, RootState } from './types';
 import { initDatabase as doInitDatabase } from '../services/database';
 import { Notifier } from './notifications';
+
+const log = elog.scope('reducers/database');
 
 interface UpdateDatabaseAction {
   type: 'UPDATE_DATABASE';

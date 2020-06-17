@@ -10,6 +10,7 @@ module.exports = {
     'react/destructuring-assignment': 0,
     'no-param-reassign': ["error", { "props": true, "ignorePropertyModificationsFor": ["draft"] }],
     'no-underscore-dangle': 0,
+    'no-prototype-builtins': 0,
     'no-restricted-syntax': [ // This is a copy of the original airbnb-base definition
       'error',
       {

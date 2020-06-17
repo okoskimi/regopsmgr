@@ -11,7 +11,7 @@ import {
 } from '@material-ui/core/styles';
 import CssBaseline from '@material-ui/core/CssBaseline';
 import Hidden from '@material-ui/core/Hidden';
-import log from 'electron-log';
+import elog from 'electron-log';
 
 // import Typography from '@material-ui/core/Typography';
 // import Link from '@material-ui/core/Link';
@@ -41,6 +41,17 @@ function Copyright() {
   );
 }
 */
+const logLevel = 'info';
+elog.transports.console.level = logLevel;
+elog.transports.file.level = logLevel;
+if (elog.transports.ipc) {
+  elog.transports.ipc.level = logLevel;
+}
+if (elog.transports.remote) {
+  elog.transports.remote.level = logLevel;
+}
+
+const log = elog.scope('layout/App');
 
 const styles = (theme: Theme) => createStyles({
   root: {

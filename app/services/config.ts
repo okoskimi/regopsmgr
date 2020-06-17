@@ -5,7 +5,7 @@ import YAML from 'yaml';
 import Ajv from 'ajv';
 import { v4 as uuidv4 } from 'uuid';
 import produce from 'immer';
-import log from 'electron-log';
+import elog from 'electron-log';
 
 import {
   ConfigFileState,
@@ -18,6 +18,8 @@ import {
   isMainConfigFIle,
   isObjectSchemaConfig
 } from '../reducers/types';
+
+const log = elog.scope('services/config');
 
 // This will be reset in loadSchemas but setting it to null here
 // would make null a possible value and force code to null check everywhere
@@ -213,10 +215,12 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
             'id' in properties ||
             'shortId' in properties ||
             'name' in properties ||
+            'created' in properties ||
+            'modified' in properties ||
             '_data' in properties
           ) {
             throw new Error(
-              `Schema ${filepath} uses reserved properties (id, shortId, name or _data)`
+              `Schema ${filepath} uses reserved properties (id, shortId, name, created, modified or _data)`
             );
           }
           // Set reserved properties.
@@ -226,7 +230,9 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
             maxLength: 255,
             // UUIDv4 regex
             pattern:
-              '/^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i'
+              '^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-4[0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$'
+            // Needed to use simplified syntax for schema validation, original below
+            // '/^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i'
           };
           properties.shortId = { type: 'string', maxLength: 255 };
           properties.name = { type: 'string', maxLength: 255 };

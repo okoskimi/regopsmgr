@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { useSnackbar } from 'notistack';
 import { useDispatch } from 'react-redux';
-import log from 'electron-log';
+import elog from 'electron-log';
 
 import {
   Dispatch,
@@ -9,6 +9,8 @@ import {
   NotificationState,
   NotificationType
 } from './types';
+
+const log = elog.scope('reducers/notifications');
 
 export type NotificationAction =
   | {
@@ -44,7 +46,7 @@ export const useNotification = () => {
       key,
       autoHideDuration: variant === NotificationType.ERROR ? 5000 : 3000,
       onClose: (_event, reason: string) => {
-        log.info('Got onClose for', message, 'with', reason);
+        log.debug('Got onClose for', message, 'with', reason);
         dispatch({
           type: 'NEW_NOTIFICATION',
           payload: {

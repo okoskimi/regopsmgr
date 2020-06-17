@@ -4,7 +4,7 @@ import React, { forwardRef, ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { connect, ConnectedProps } from 'react-redux';
 import clsx from 'clsx';
-import log from 'electron-log';
+import elog from 'electron-log';
 
 import { createStyles, Theme, withStyles, WithStyles } from '@material-ui/core/styles';
 import Divider from '@material-ui/core/Divider';
@@ -19,6 +19,8 @@ import { Omit } from '@material-ui/types';
 import SvgIcon from '@material-ui/core/SvgIcon';
 
 import { RootState } from '../reducers/types';
+
+const log = elog.scope('layout/Navigator');
 
 type CustomNavProps = {
   children: ReactNode;
@@ -141,7 +143,7 @@ function Navigator(props: Props) {
               </ListItemText>
             </ListItem>
             {category.items.map(item => {
-              log.info ("Active", item.path === pathname, "Item path", item.path, "Pathname", pathname);
+              log.debug ("Active", item.path === pathname, "Item path", item.path, "Pathname", pathname);
               return (
                 <ListItem
                   key={item.id}

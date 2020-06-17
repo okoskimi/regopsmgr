@@ -6,7 +6,7 @@ import {
   ModelOptions,
   Association
 } from 'sequelize';
-import log from 'electron-log';
+import elog from 'electron-log';
 import path from 'path';
 
 import {
@@ -19,6 +19,8 @@ import {
 } from '../reducers/types';
 
 export const database = new Sequelize('sqlite::memory:');
+
+const log = elog.scope('services/database');
 
 type ModelType = typeof Model;
 
@@ -231,9 +233,13 @@ export const initDatabase = async (configs: ConfigFileState) => {
             allowNull: false
           },
           shortId: DataTypes.STRING,
-          name: DataTypes.STRING
+          name: DataTypes.STRING,
+          created: DataTypes.DATE,
+          modified: DataTypes.DATE
         };
         const modelOptions: ModelOptions = {
+          // Do not autocreate timestamps because they come from git
+          timestamps: false,
           // Note that sqlite creates automatically index for primary key (id)
           indexes: [
             {
@@ -241,6 +247,9 @@ export const initDatabase = async (configs: ConfigFileState) => {
             },
             {
               fields: ['name']
+            },
+            {
+              fields: ['modified']
             }
           ]
         };

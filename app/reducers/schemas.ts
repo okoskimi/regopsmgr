@@ -1,10 +1,12 @@
 import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
-import log from 'electron-log';
+import elog from 'electron-log';
 
 import { SchemaState, Dispatch, ConfigFileState, RootState } from './types';
 import { loadSchemas } from '../services/config';
 import { Notifier } from './notifications';
+
+const log = elog.scope('reducers/schemas');
 
 interface SetSchemaAction {
   type: 'SET_SCHEMAS';

@@ -1,11 +1,13 @@
 import path from 'path';
 import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
-import log from 'electron-log';
+import elog from 'electron-log';
 
 import { ConfigFileState, Dispatch, RootState } from './types';
 import { getConfigFiles } from '../services/config';
 import { Notifier } from './notifications';
+
+const log = elog.scope('reducers/configFiles');
 
 interface SetConfigAction {
   type: 'SET_CONFIG_FILES';
