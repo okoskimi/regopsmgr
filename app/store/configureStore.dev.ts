@@ -4,7 +4,7 @@ import { createHashHistory } from 'history';
 import { routerMiddleware, routerActions } from 'connected-react-router';
 import { createLogger } from 'redux-logger';
 import createRootReducer from '../reducers';
-import { RootState } from '../reducers/types';
+import { RootState } from '../types/store';
 
 import {
   increment,

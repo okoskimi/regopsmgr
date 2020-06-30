@@ -2,7 +2,9 @@ import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
 import elog from 'electron-log';
 
-import { Dispatch, ConfigFileState, RootState, AppMenuState } from './types';
+import { Dispatch, RootState } from '../types/store';
+import { AppMenuState } from '../types/app';
+import { ConfigFileState } from '../types/config';
 import { loadAppMenu } from '../services/config';
 import { Notifier } from './notifications';
 
@@ -49,6 +51,7 @@ const reducer = (
       name: 'Dashboard',
       icon: '',
       path: '/',
+      pathWithParams: '/',
       id: '1'
     },
     categories: []

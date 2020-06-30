@@ -3,12 +3,12 @@ import { useSnackbar } from 'notistack';
 import { useDispatch } from 'react-redux';
 import elog from 'electron-log';
 
+import { Dispatch } from '../types/store';
 import {
-  Dispatch,
   Notification,
   NotificationState,
   NotificationType
-} from './types';
+} from '../types/app';
 
 const log = elog.scope('reducers/notifications');
 

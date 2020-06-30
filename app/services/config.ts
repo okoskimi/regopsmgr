@@ -7,17 +7,15 @@ import { v4 as uuidv4 } from 'uuid';
 import produce from 'immer';
 import elog from 'electron-log';
 
+import { isString } from '../types/util';
+import { AppMenuState } from '../types/app';
+import { SchemaState, getSchema, isObjectSchemaConfig } from '../types/schema';
 import {
   ConfigFileState,
   ConfigFile,
-  SchemaState,
-  AppMenuState,
   isSchemaConfigFile,
-  getSchema,
-  isString,
-  isMainConfigFIle,
-  isObjectSchemaConfig
-} from '../reducers/types';
+  isMainConfigFIle
+} from '../types/config';
 
 const log = elog.scope('services/config');
 
@@ -307,7 +305,8 @@ const menuSchema = {
       properties: {
         name: { type: 'string' },
         icon: { type: 'string' },
-        path: { type: 'string' }
+        path: { type: 'string' },
+        params: { type: 'object' }
       }
     },
     categories: {
@@ -317,7 +316,8 @@ const menuSchema = {
         properties: {
           name: { type: 'string' },
           icon: { type: 'string' },
-          path: { type: 'string' }
+          path: { type: 'string' },
+          params: { type: 'object' }
         }
       }
     }
@@ -341,6 +341,13 @@ export const loadAppMenu = (configs: ConfigFileState): AppMenuState => {
       name: mainConfigFile.content.home.name,
       icon: mainConfigFile.content.home.icon,
       path: mainConfigFile.content.home.path,
+      pathWithParams: `${mainConfigFile.content.home.path}?params=${Buffer.from(
+        JSON.stringify(
+          mainConfigFile.content.home.params
+            ? mainConfigFile.content.home.params
+            : {}
+        )
+      ).toString('base64')}`,
       id: uuidv4()
     },
     categories: mainConfigFile.content.categories.map(category => ({
@@ -350,6 +357,9 @@ export const loadAppMenu = (configs: ConfigFileState): AppMenuState => {
         name: item.name,
         icon: item.icon,
         path: item.path,
+        pathWithParams: `${item.path}?params=${Buffer.from(
+          JSON.stringify(item.params ? item.params : {})
+        ).toString('base64')}`,
         id: uuidv4()
       }))
     }))

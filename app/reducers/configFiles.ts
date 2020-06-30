@@ -3,7 +3,8 @@ import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
 import elog from 'electron-log';
 
-import { ConfigFileState, Dispatch, RootState } from './types';
+import { Dispatch, RootState } from '../types/store';
+import { ConfigFileState } from '../types/config';
 import { getConfigFiles } from '../services/config';
 import { Notifier } from './notifications';
 

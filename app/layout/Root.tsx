@@ -11,7 +11,7 @@ import { createMuiTheme, ThemeProvider } from '@material-ui/core/styles';
 import { Button } from '@material-ui/core';
 
 
-import { Store } from '../reducers/types';
+import { Store } from '../types/store';
 import { markNotificationAsSeen as _markNotificationAsSeen } from '../reducers/notifications';
 
 import App from './App';

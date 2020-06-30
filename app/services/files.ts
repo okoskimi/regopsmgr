@@ -1,4 +1,5 @@
 import fs, { promises as fsp } from 'fs';
+import pathlib from 'path';
 import git, { ReadCommitResult } from 'isomorphic-git';
 import YAML from 'yaml';
 import { v4 as uuidv4 } from 'uuid';
@@ -6,7 +7,9 @@ import elog from 'electron-log';
 
 import { database, setAssociation } from './database';
 import { validate } from './config';
-import { ObjectSchema, assertIsDefined } from '../reducers/types';
+import { assertIsDefined } from '../types/util';
+import { File } from '../types/file';
+import { ObjectSchema } from '../types/schema';
 
 const log = elog.scope('services/files');
 
@@ -207,10 +210,11 @@ const adjustTimestamps = (timestamps: Timestamps, commit: ReadCommitResult) => {
 //  Setting onlyModified to true saves a full git log iteration (only first log item is checked)
 //  but returns -1 for the creation timestamp
 const getTimestamps = async (
-  filepath: string,
-  dir: string
+  path: string,
+  gitDir: string
 ): Promise<Timestamps> => {
-  const commits = await git.log({ fs, dir });
+  log.info(`Looking for timestamps of ${path} at ${gitDir}`);
+  const commits = await git.log({ fs, dir: gitDir });
   let lastSHA = null;
   let lastCommit = null;
   const timestamps = {
@@ -221,7 +225,17 @@ const getTimestamps = async (
     const commit = commits[i];
     try {
       // eslint-disable-next-line no-await-in-loop
-      const o = await git.readObject({ fs, dir, oid: commit.oid, filepath });
+      const o = await git.readObject({
+        fs,
+        dir: gitDir,
+        oid: commit.oid,
+        filepath: path
+      });
+      log.info(
+        `Found file in git commit at ${new Date(
+          commit.commit.committer.timestamp * 1000
+        )}`
+      );
       if (i === commits.length - 1) {
         // file already existed in first commit
         adjustTimestamps(timestamps, commit);
@@ -245,28 +259,31 @@ const getTimestamps = async (
   }
   // File is not in git
   if (timestamps.modified < 0) {
-    const stat = await fsp.stat(filepath);
+    log.info('No commits found');
+    const stat = await fsp.stat(pathlib.join(gitDir, path));
     return {
       modified: stat.mtimeMs,
       created: stat.birthtimeMs
     };
   }
-  const status = await git.status({ fs, dir, filepath });
+  const status = await git.status({ fs, dir: gitDir, filepath: path });
   // File has not been modified since checkout
   if (status !== 'unmodified') {
-    const stat = await fsp.stat(filepath);
+    log.info('File has been modified since checkout');
+    const stat = await fsp.stat(pathlib.join(gitDir, path));
     timestamps.modified = stat.mtimeMs;
   }
   return timestamps;
 };
 
-export const loadFileToDatabase = async (
+export const loadObjectFileToDatabase = async (
   path: string,
   gitDir: string,
   schema: ObjectSchema
-) => {
+): Promise<File> => {
+  const fullPath = pathlib.join(gitDir, path);
   log.info(`Loading file ${path} of type ${schema.name}`);
-  const contentStr = await fsp.readFile(path, { encoding: 'utf8' });
+  const contentStr = await fsp.readFile(fullPath, { encoding: 'utf8' });
   const contentObj = YAML.parse(contentStr);
   if (!contentObj.id) {
     // Force ID to be first property so that it is first in YAML file
@@ -275,7 +292,7 @@ export const loadFileToDatabase = async (
       ...contentObj
     };
     log.info('Saving ID to ', path);
-    await saveYamlFile(path, yamlData);
+    await saveYamlFile(fullPath, yamlData);
     contentObj.id = yamlData.id;
   }
 
@@ -318,6 +335,17 @@ export const loadFileToDatabase = async (
     );
   }
   await Promise.all(associationPromises);
+  const [dump] = await database.query('SELECT * FROM Risks');
+  log.info('Database contents:', dump);
+  return {
+    path,
+    id: contentObj.id,
+    shortId: contentObj.shortId,
+    name: contentObj.name,
+    description: contentObj.description,
+    content: contentObj,
+    schema
+  };
 };
 
 export default {};

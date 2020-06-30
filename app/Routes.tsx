@@ -7,6 +7,7 @@ import HomePage from './pages/Home';
 import CounterPage from './pages/Counter';
 import CounterPage2 from './pages/Counter2';
 import Notifications from './pages/Notifications';
+import FileTable from './pages/FileTable';
 
 function Routes() {
   return (
@@ -14,6 +15,7 @@ function Routes() {
       <Route path={Paths.COUNTER_HOME} component={CounterPage} />
       <Route path={Paths.COUNTER_COUNTER} component={CounterPage2} />
       <Route path={Paths.NOTIFICATIONS} component={Notifications} />
+      <Route path={Paths.FILE_TABLE} component={FileTable} />
       <Route path={Paths.HOME} component={HomePage} />
     </Switch>
   );

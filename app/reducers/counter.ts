@@ -1,5 +1,5 @@
 import { Action } from 'redux';
-import { GetState, Dispatch } from './types';
+import { GetState, Dispatch } from '../types/store';
 
 export const INCREMENT_COUNTER = 'INCREMENT_COUNTER';
 export const DECREMENT_COUNTER = 'DECREMENT_COUNTER';

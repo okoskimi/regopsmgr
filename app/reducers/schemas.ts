@@ -2,7 +2,9 @@ import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
 import elog from 'electron-log';
 
-import { SchemaState, Dispatch, ConfigFileState, RootState } from './types';
+import { Dispatch, RootState } from '../types/store';
+import { SchemaState } from '../types/schema';
+import { ConfigFileState } from '../types/config';
 import { loadSchemas } from '../services/config';
 import { Notifier } from './notifications';
 

@@ -6,32 +6,24 @@ import { produce } from 'immer';
 import { AssertionError } from 'assert';
 import elog from 'electron-log';
 
-import {
-  FileState,
-  DatabaseState,
-  Schema,
-  SchemaState,
-  Dispatch,
-  RootState,
-  isObjectSchema
-} from './types';
+import { Dispatch, RootState } from '../types/store';
+import { File, FileState, Directory } from '../types/file';
+import { DatabaseState } from '../types/database';
+import { Schema, SchemaState, isObjectSchema } from '../types/schema';
 import { Notifier } from './notifications';
 import { updateDatabase } from './database';
-import { loadFileToDatabase } from '../services/files';
+import { loadObjectFileToDatabase } from '../services/files';
 
 const log = elog.scope('reducers/files');
 
 interface FileEventAction {
-  type:
-    | 'FILE_ADDED'
-    | 'FILE_CHANGED'
-    | 'FILE_REMOVED'
-    | 'DIRECTORY_ADDED'
-    | 'DIRECTORY_CHANGED'
-    | 'DIRECTORY_REMOVED'
-    | 'SET_FILES';
+  type: 'FILE_ADDED' | 'FILE_CHANGED' | 'FILE_REMOVED';
+  file: File;
+}
+
+interface DirectoryEventAction {
+  type: 'DIRECTORY_ADDED' | 'DIRECTORY_CHANGED' | 'DIRECTORY_REMOVED';
   path: string;
-  schema?: Schema;
 }
 
 interface SetFilesAction {
@@ -40,7 +32,7 @@ interface SetFilesAction {
   directories: Array<string>;
 }
 
-type FileAction = FileEventAction | SetFilesAction;
+type FileAction = FileEventAction | DirectoryEventAction | SetFilesAction;
 
 let watcher: chokidar.FSWatcher | null = null;
 
@@ -55,13 +47,9 @@ export const setFiles = (
   };
 };
 
-export const fileAdded = (
-  path: string,
-  schema: Schema | undefined
-): FileAction => ({
+export const fileAdded = (file: File): FileAction => ({
   type: 'FILE_ADDED',
-  path,
-  schema
+  file
 });
 
 export const directoryAdded = (path: string): FileAction => ({
@@ -69,9 +57,9 @@ export const directoryAdded = (path: string): FileAction => ({
   path
 });
 
-type FileList = Array<{ path: string; schema?: Schema }>;
+type FileList = Array<File>;
 
-const initialPromises: Array<Promise<void>> = [];
+const initialPromises: Array<Promise<File>> = [];
 const initialFiles: FileList = [];
 const initialDirectories: Array<string> = [];
 let ready = false;
@@ -94,15 +82,24 @@ export const initFiles = (
   notify: Notifier
 ): ThunkAction<void, RootState, unknown, Action<string>> => {
   const rootDir = pathlib.join(process.cwd(), '..', 'branchtest');
-  // Reset in case we run several times
-  initialPromises.length = 0;
-  initialFiles.length = 0;
-  initialDirectories.length = 0;
+
   return async (dispatch: Dispatch) => {
     if (db.version !== 1 || schemas.data.length === 0) {
       // database not yet initialized or already done
       // or schemas not yet initialized
       return;
+    }
+    // Reset in case we run several times
+    initialPromises.length = 0;
+    initialFiles.length = 0;
+    initialDirectories.length = 0;
+    ready = false;
+    if (watcher) {
+      try {
+        await watcher.close();
+      } catch (ignore) {
+        log.info('Error when closing on reset:', ignore);
+      }
     }
     try {
       watcher = chokidar.watch(rootDir, {
@@ -116,26 +113,23 @@ export const initFiles = (
         if (schema && isObjectSchema(schema)) {
           log.info('Loading to database:', path, 'with schema:', schema.name);
           try {
-            const promise = loadFileToDatabase(
-              pathlib.join(rootDir, path),
-              rootDir,
-              schema
-            );
+            const promise = loadObjectFileToDatabase(path, rootDir, schema);
             if (!ready) {
               initialPromises.push(promise);
+              initialFiles.push({ path, schema });
             } else {
-              await promise;
+              const file = await promise;
               dispatch(updateDatabase());
+              dispatch(fileAdded(file));
             }
           } catch (error) {
             log.info(`Unable to load ${path}: ${error}`);
             notify.error(`Unable to load ${path}: ${error}`);
           }
-        }
-        if (!ready) {
-          initialFiles.push({ path, schema });
+        } else if (!ready) {
+          initialFiles.push({ name: pathlib.basename(path), path, schema });
         } else {
-          dispatch(fileAdded(path, schema));
+          dispatch(fileAdded({ name: pathlib.basename(path), path, schema }));
         }
       });
 
@@ -183,79 +177,130 @@ export function assertIsSetFilesAction(
 export function assertIsFileEventAction(
   val: FileAction
 ): asserts val is FileEventAction {
-  if (val.type === 'SET_FILES') {
+  if (!['FILE_ADDED', 'FILE_CHANGED', 'FILE_REMOVED'].includes(val.type)) {
     throw new AssertionError({
       message: `Expected 'val' to not be SetFilesAction: ${val}`
     });
   }
 }
 
-const reducer = (
-  state: FileState = {
-    list: [],
-    filesByPath: {},
-    directoriesByPath: {},
-    structure: {
+export function assertIsDirectoryEventAction(
+  val: FileAction
+): asserts val is DirectoryEventAction {
+  if (
+    !['DIRECTORY_ADDED', 'DIRECTORY_CHANGED', 'DIRECTORY_REMOVED'].includes(
+      val.type
+    )
+  ) {
+    throw new AssertionError({
+      message: `Expected 'val' to not be SetFilesAction: ${val}`
+    });
+  }
+}
+
+// Convert dot to empty string
+const canonicalDirname = (path: string): string => {
+  const dir = pathlib.dirname(path);
+  if (dir === '.') {
+    return '';
+  }
+  return dir;
+};
+
+class FileStateClass {
+  list: Array<File>;
+
+  filesByPath: {
+    [path: string]: File;
+  };
+
+  directoriesByPath: {
+    [path: string]: Directory;
+  };
+
+  structure: Directory;
+
+  base: string; // The directory that contains the .git directory. All paths are relative to this.
+
+  constructor() {
+    this.list = [];
+    this.filesByPath = {};
+    this.directoriesByPath = {};
+    this.structure = {
       path: '.',
       subdirectories: [],
       files: []
-    },
-    base: pathlib.join(process.cwd(), '..', 'branchtest')
-  },
+    };
+    this.base = pathlib.join(process.cwd(), '..', 'branchtest');
+  }
+}
+
+const reducer = (
+  state: FileState = new FileStateClass(),
   action: FileAction
 ): FileState => {
+  const newState = new FileStateClass();
   switch (action.type) {
     case 'SET_FILES':
       assertIsSetFilesAction(action);
-      return produce(state, draft => {
-        action.directories.forEach(dir => {
-          draft.directoriesByPath[dir] = {
-            path: dir,
-            subdirectories: [],
-            files: []
-          };
-        });
-        action.directories.forEach(dir => {
-          const parentDir = draft.directoriesByPath[pathlib.dirname(dir)];
-          if (parentDir) {
-            parentDir.subdirectories.push(draft.directoriesByPath[dir]);
-          } else {
-            draft.structure = draft.directoriesByPath[dir];
-          }
-        });
-        action.files.forEach(file => {
-          const parentDir = draft.directoriesByPath[pathlib.dirname(file.path)];
-          if (parentDir) {
-            parentDir.files.push({
-              ...file
-            });
-          } else {
-            throw new Error(`Parent directory not found for ${file}`);
-          }
-        });
-      }); // produce
+      log.info('Begin SET_FILES');
+      action.directories.forEach(dir => {
+        newState.directoriesByPath[dir] = {
+          path: dir,
+          subdirectories: [],
+          files: []
+        };
+        log.info('Created directory record for ', dir);
+      });
+      action.directories.forEach(dir => {
+        const parentDir = newState.directoriesByPath[canonicalDirname(dir)];
+        if (parentDir) {
+          parentDir.subdirectories.push(newState.directoriesByPath[dir]);
+        } else {
+          log.info('Root dir is ', dir);
+          newState.structure = newState.directoriesByPath[dir];
+        }
+      });
+      action.files.forEach(file => {
+        const parentDir =
+          newState.directoriesByPath[canonicalDirname(file.path)];
+        if (parentDir) {
+          parentDir.files.push(file);
+        } else {
+          throw new Error(
+            `Parent directory not found for ${
+              file.path
+            } (looked for ${canonicalDirname(file.path)})`
+          );
+        }
+        newState.list.push(file);
+      });
+      log.info('End SET_FILES ');
+      log.info('Called produce, now returning: ', newState);
+      return newState;
     // TODO: This does not work if a directory and files are added at the same time
     // - may get this event before the directory add event
     case 'FILE_ADDED':
       assertIsFileEventAction(action);
       return produce(state, draft => {
-        const parentDir = draft.directoriesByPath[pathlib.dirname(action.path)];
-        parentDir.files.push({
-          path: action.path,
-          schema: action.schema
-        });
+        const parentDir =
+          draft.directoriesByPath[pathlib.dirname(action.file.path)];
+        parentDir.files.push(action.file);
+        draft.filesByPath[action.file.path] = action.file;
       });
     // TODO: This does not work if a directory and files are added at the same time
     // - may get this event after the file add events
     case 'DIRECTORY_ADDED':
-      assertIsFileEventAction(action);
+      assertIsDirectoryEventAction(action);
       return produce(state, draft => {
         const parentDir = draft.directoriesByPath[pathlib.dirname(action.path)];
-        parentDir.subdirectories.push({
+        const dir = {
           path: action.path,
           files: [],
           subdirectories: []
-        });
+        };
+        parentDir.subdirectories.push(dir);
+        draft.directoriesByPath[action.path] = dir;
       });
     default:
       return state;

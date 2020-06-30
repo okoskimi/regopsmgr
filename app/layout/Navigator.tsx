@@ -18,7 +18,7 @@ import ListItemText from '@material-ui/core/ListItemText';
 import { Omit } from '@material-ui/types';
 import SvgIcon from '@material-ui/core/SvgIcon';
 
-import { RootState } from '../reducers/types';
+import { RootState } from '../types/store';
 
 const log = elog.scope('layout/Navigator');
 
@@ -143,7 +143,7 @@ function Navigator(props: Props) {
               </ListItemText>
             </ListItem>
             {category.items.map(item => {
-              log.debug ("Active", item.path === pathname, "Item path", item.path, "Pathname", pathname);
+              log.debug ("Active", item.path === pathname, "Item pathWithParams", item.pathWithParams, "Pathname", pathname);
               return (
                 <ListItem
                   key={item.id}
@@ -154,7 +154,7 @@ function Navigator(props: Props) {
                     activeClassName={classes.itemActiveItem}
                     className={classes.item}
                     component={CustomNavLink}
-                    to={item.path}
+                    to={item.pathWithParams}
                   >
                     <ListItemIcon className={classes.itemIcon}>
                       <SvgIcon>

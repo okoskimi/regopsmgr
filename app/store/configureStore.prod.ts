@@ -3,7 +3,7 @@ import thunk from 'redux-thunk';
 import { createHashHistory } from 'history';
 import { routerMiddleware } from 'connected-react-router';
 import createRootReducer from '../reducers';
-import { Store, RootState } from '../reducers/types';
+import { Store, RootState } from '../types/store';
 
 const history = createHashHistory();
 const rootReducer = createRootReducer(history);

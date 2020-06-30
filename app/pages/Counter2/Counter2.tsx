@@ -7,7 +7,7 @@ import {
   incrementIfOdd,
   incrementAsync
 } from '../../reducers/counter';
-import { RootState } from '../../reducers/types';
+import { RootState } from '../../types/store';
 
 function mapStateToProps(state: RootState) {
   return {

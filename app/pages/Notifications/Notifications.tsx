@@ -14,7 +14,8 @@ import { makeStyles } from '@material-ui/core/styles';
 import formatDistance from 'date-fns/formatDistance';
 import formatISO9075 from 'date-fns/formatISO9075';
 
-import { RootState, NotificationType } from '../../reducers/types';
+import { RootState } from '../../types/store';
+import { NotificationType } from '../../types/app';
 
 type OwnProps = {};
 

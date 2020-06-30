@@ -22,7 +22,7 @@ import Tooltip from '@material-ui/core/Tooltip';
 // import Typography from '@material-ui/core/Typography';
 import { createStyles, Theme, withStyles, WithStyles } from '@material-ui/core/styles';
 
-import { RootState } from '../reducers/types';
+import { RootState } from '../types/store';
 import Paths from '../constants/paths';
 import { markAllAsSeen as _markAllAsSeen } from '../reducers/notifications';
 

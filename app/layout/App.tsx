@@ -11,6 +11,7 @@ import {
 } from '@material-ui/core/styles';
 import CssBaseline from '@material-ui/core/CssBaseline';
 import Hidden from '@material-ui/core/Hidden';
+import { enableAllPlugins } from 'immer';
 import elog from 'electron-log';
 
 // import Typography from '@material-ui/core/Typography';
@@ -19,7 +20,7 @@ import elog from 'electron-log';
 import Navigator from './Navigator';
 import Content from './Content';
 import Header from './Header';
-import { RootState } from '../reducers/types';
+import { RootState } from '../types/store';
 import { initConfigFiles as _initConfigFiles } from '../reducers/configFiles';
 import { initSchemas as _initSchemas } from '../reducers/schemas';
 import { initDatabase as _initDatabase } from '../reducers/database';
@@ -41,6 +42,9 @@ function Copyright() {
   );
 }
 */
+
+enableAllPlugins();
+
 const logLevel = 'info';
 elog.transports.console.level = logLevel;
 elog.transports.file.level = logLevel;

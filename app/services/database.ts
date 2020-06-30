@@ -9,14 +9,9 @@ import {
 import elog from 'electron-log';
 import path from 'path';
 
-import {
-  ConfigFileState,
-  isSchemaConfigFile,
-  Schema,
-  getSchema,
-  isObjectSchema,
-  assertIsDefined
-} from '../reducers/types';
+import { assertIsDefined } from '../types/util';
+import { Schema, getSchema, isObjectSchema } from '../types/schema';
+import { ConfigFileState, isSchemaConfigFile } from '../types/config';
 
 export const database = new Sequelize('sqlite::memory:');
 
@@ -364,6 +359,8 @@ export const initDatabase = async (configs: ConfigFileState) => {
         } for relationship ${a.name} in ${a.filepath} does not exist`
       );
     }
+    // Schema properties for association that are not known properties (which are removed below)
+    // are used as options for creating the association
     const options = { ...a }; // Shallow copy
     // Deleting properties from shallow copy does not affect original copy
     delete options.source;
