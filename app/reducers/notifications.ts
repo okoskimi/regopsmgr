@@ -3,12 +3,8 @@ import { useSnackbar } from 'notistack';
 import { useDispatch } from 'react-redux';
 import elog from 'electron-log';
 
-import { Dispatch } from '../types/store';
-import {
-  Notification,
-  NotificationState,
-  NotificationType
-} from '../types/app';
+import { Dispatch, NotificationState } from '../types/store';
+import { Notification, NotificationType } from '../types/app';
 
 const log = elog.scope('reducers/notifications');
 
@@ -137,10 +133,7 @@ const insertIntoNotifications = (
 };
 
 const reducer = (
-  state: NotificationState = {
-    hasUnseenErrors: false,
-    data: []
-  },
+  state: NotificationState = new NotificationState(),
   action: NotificationAction
 ): NotificationState => {
   let newState = state;

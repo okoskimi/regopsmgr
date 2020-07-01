@@ -8,8 +8,8 @@ import elog from 'electron-log';
 import { database, setAssociation } from './database';
 import { validate } from './config';
 import { assertIsDefined } from '../types/util';
-import { File } from '../types/file';
-import { ObjectSchema } from '../types/schema';
+import { FileEntry } from '../types/file';
+import { ObjectSchema, defaultSchema } from '../types/schema';
 
 const log = elog.scope('services/files');
 
@@ -189,37 +189,42 @@ const saveYamlFile = async (filepath: string, modifiedObj: any) => {
   }
 };
 
-interface Timestamps {
+interface GitStatus {
   modified: number;
   created: number;
+  inGit: boolean;
+  uncommittedChanges: boolean;
 }
 
-const adjustTimestamps = (timestamps: Timestamps, commit: ReadCommitResult) => {
+const adjustStatusTimestamps = (
+  status: GitStatus,
+  commit: ReadCommitResult
+) => {
   const commitTimestamp = commit.commit.committer.timestamp * 1000;
-  if (timestamps.modified < 0 || timestamps.modified < commitTimestamp) {
+  if (status.modified < 0 || status.modified < commitTimestamp) {
     // eslint-disable-next-line no-param-reassign
-    timestamps.modified = commitTimestamp;
+    status.modified = commitTimestamp;
   }
-  if (timestamps.created < 0 || timestamps.created > commitTimestamp) {
+  if (status.created < 0 || status.created > commitTimestamp) {
     // eslint-disable-next-line no-param-reassign
-    timestamps.created = commitTimestamp;
+    status.created = commitTimestamp;
   }
 };
 
-//  Get created and modified timestamps.
-//  Setting onlyModified to true saves a full git log iteration (only first log item is checked)
-//  but returns -1 for the creation timestamp
-const getTimestamps = async (
+//  Get git status, including created and modified timestamps.
+const getGitStatus = async (
   path: string,
   gitDir: string
-): Promise<Timestamps> => {
+): Promise<GitStatus> => {
   log.info(`Looking for timestamps of ${path} at ${gitDir}`);
   const commits = await git.log({ fs, dir: gitDir });
   let lastSHA = null;
   let lastCommit = null;
-  const timestamps = {
+  const statusResult = {
     modified: -1,
-    created: -1
+    created: -1,
+    inGit: true,
+    uncommittedChanges: false
   };
   for (let i = 0; i < commits.length; i += 1) {
     const commit = commits[i];
@@ -238,12 +243,12 @@ const getTimestamps = async (
       );
       if (i === commits.length - 1) {
         // file already existed in first commit
-        adjustTimestamps(timestamps, commit);
+        adjustStatusTimestamps(statusResult, commit);
         break;
       }
       if (o.oid !== lastSHA) {
         if (lastCommit !== null) {
-          adjustTimestamps(timestamps, lastCommit);
+          adjustStatusTimestamps(statusResult, lastCommit);
         }
         lastSHA = o.oid;
       }
@@ -251,36 +256,39 @@ const getTimestamps = async (
       // File no longer there, or wasn't in git at all
       // If not in git at all, then lastCommit is null
       if (lastCommit != null) {
-        adjustTimestamps(timestamps, lastCommit);
+        adjustStatusTimestamps(statusResult, lastCommit);
       }
       break;
     }
     lastCommit = commit;
   }
   // File is not in git
-  if (timestamps.modified < 0) {
+  if (statusResult.modified < 0) {
     log.info('No commits found');
     const stat = await fsp.stat(pathlib.join(gitDir, path));
     return {
       modified: stat.mtimeMs,
-      created: stat.birthtimeMs
+      created: stat.birthtimeMs,
+      inGit: false,
+      uncommittedChanges: true // The existence of the file is an uncommitted change
     };
   }
   const status = await git.status({ fs, dir: gitDir, filepath: path });
   // File has not been modified since checkout
   if (status !== 'unmodified') {
     log.info('File has been modified since checkout');
+    statusResult.uncommittedChanges = true;
     const stat = await fsp.stat(pathlib.join(gitDir, path));
-    timestamps.modified = stat.mtimeMs;
+    statusResult.modified = stat.mtimeMs;
   }
-  return timestamps;
+  return statusResult;
 };
 
 export const loadObjectFileToDatabase = async (
   path: string,
   gitDir: string,
   schema: ObjectSchema
-): Promise<File> => {
+): Promise<FileEntry> => {
   const fullPath = pathlib.join(gitDir, path);
   log.info(`Loading file ${path} of type ${schema.name}`);
   const contentStr = await fsp.readFile(fullPath, { encoding: 'utf8' });
@@ -322,12 +330,18 @@ export const loadObjectFileToDatabase = async (
       );
     }
   });
-  const timestamps = await getTimestamps(path, gitDir);
+  const gitStatus = await getGitStatus(path, gitDir);
   contentObj._data = jsonObj;
-  contentObj.created = new Date(timestamps.created);
-  contentObj.modified = new Date(timestamps.modified);
+  contentObj.created = new Date(gitStatus.created);
+  contentObj.modified = new Date(gitStatus.modified);
   const associationPromises: Array<Promise<void>> = [];
-  const instance = await database.models[schema.name].create(contentObj);
+  const model = database.models[schema.name];
+  if (!model) {
+    throw new Error(
+      `Database not properly initialized, model ${schema.name} missing`
+    );
+  }
+  const instance = await model.create(contentObj);
   for (const key of Object.keys(associations)) {
     const association = associations[key];
     associationPromises.push(
@@ -337,14 +351,39 @@ export const loadObjectFileToDatabase = async (
   await Promise.all(associationPromises);
   const [dump] = await database.query('SELECT * FROM Risks');
   log.info('Database contents:', dump);
+
   return {
     path,
-    id: contentObj.id,
+    id: `uuid:${contentObj.id}`,
     shortId: contentObj.shortId,
     name: contentObj.name,
-    description: contentObj.description,
+    description: contentObj.description
+      ? contentObj.description
+      : `${schema.name} file ${path}`,
+    created: contentObj.created,
+    modified: contentObj.modified,
+    uncommittedChanges: gitStatus.uncommittedChanges,
     content: contentObj,
     schema
+  };
+};
+
+export const loadOtherFile = async (
+  path: string,
+  gitDir: string
+): Promise<FileEntry> => {
+  log.info(`Loading other file ${path}`);
+  const gitStatus = await getGitStatus(path, gitDir);
+  return {
+    path,
+    id: `file:${path}`,
+    shortId: path,
+    name: pathlib.basename(path),
+    description: `${defaultSchema.name} file ${path}`,
+    created: new Date(gitStatus.created),
+    modified: new Date(gitStatus.modified),
+    uncommittedChanges: gitStatus.uncommittedChanges,
+    schema: defaultSchema
   };
 };
 

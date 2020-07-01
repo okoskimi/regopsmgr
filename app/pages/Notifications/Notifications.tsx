@@ -44,7 +44,7 @@ interface NotificationProps {
   seen: boolean;
   children: ReactNode;
 }
-const Notification = (props: NotificationProps) => {
+const NotificationElement = (props: NotificationProps) => {
   const { type, seen } = props;
   return (
     <Alert variant={seen ? 'outlined' : 'filled'} severity={type}>
@@ -73,9 +73,9 @@ const Notifications = (props: Props) => {
             {notifications.data.map(msg => (
               <TableRow key={msg.id}>
                 <TableCell>
-                  <Notification seen={msg.seen} type={msg.type}>
+                  <NotificationElement seen={msg.seen} type={msg.type}>
                     {msg.message}
-                  </Notification>
+                  </NotificationElement>
                 </TableCell>
                 <TableCell>
                   {`${formatDistance(new Date(msg.timestamp), now)} ago`}

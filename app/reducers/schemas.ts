@@ -2,9 +2,12 @@ import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
 import elog from 'electron-log';
 
-import { Dispatch, RootState } from '../types/store';
-import { SchemaState } from '../types/schema';
-import { ConfigFileState } from '../types/config';
+import {
+  Dispatch,
+  RootState,
+  SchemaState,
+  ConfigFileState
+} from '../types/store';
 import { loadSchemas } from '../services/config';
 import { Notifier } from './notifications';
 
@@ -29,7 +32,7 @@ export const initSchemas = (
   notify: Notifier
 ): ThunkAction<void, RootState, unknown, Action<string>> => {
   return async (dispatch: Dispatch) => {
-    if (Object.keys(configs).length === 0) {
+    if (configs.data.length === 0) {
       // initial call with no data
       return;
     }
@@ -46,7 +49,7 @@ export const initSchemas = (
 };
 
 const reducer = (
-  state: SchemaState = { byId: {}, data: [] },
+  state: SchemaState = new SchemaState(),
   action: SchemaAction
 ): SchemaState => {
   switch (action.type) {

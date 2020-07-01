@@ -6,19 +6,24 @@ import { produce } from 'immer';
 import { AssertionError } from 'assert';
 import elog from 'electron-log';
 
-import { Dispatch, RootState } from '../types/store';
-import { File, FileState, Directory } from '../types/file';
-import { DatabaseState } from '../types/database';
-import { Schema, SchemaState, isObjectSchema } from '../types/schema';
+import {
+  Dispatch,
+  RootState,
+  FileState,
+  SchemaState,
+  DatabaseState
+} from '../types/store';
+import { FileEntry } from '../types/file';
+import { Schema, isObjectSchema } from '../types/schema';
 import { Notifier } from './notifications';
 import { updateDatabase } from './database';
-import { loadObjectFileToDatabase } from '../services/files';
+import { loadObjectFileToDatabase, loadOtherFile } from '../services/files';
 
 const log = elog.scope('reducers/files');
 
 interface FileEventAction {
   type: 'FILE_ADDED' | 'FILE_CHANGED' | 'FILE_REMOVED';
-  file: File;
+  file: FileEntry;
 }
 
 interface DirectoryEventAction {
@@ -47,7 +52,7 @@ export const setFiles = (
   };
 };
 
-export const fileAdded = (file: File): FileAction => ({
+export const fileAdded = (file: FileEntry): FileAction => ({
   type: 'FILE_ADDED',
   file
 });
@@ -57,10 +62,9 @@ export const directoryAdded = (path: string): FileAction => ({
   path
 });
 
-type FileList = Array<File>;
+type FileList = Array<FileEntry>;
 
-const initialPromises: Array<Promise<File>> = [];
-const initialFiles: FileList = [];
+const initialPromises: Array<Promise<FileEntry>> = [];
 const initialDirectories: Array<string> = [];
 let ready = false;
 
@@ -82,26 +86,28 @@ export const initFiles = (
   notify: Notifier
 ): ThunkAction<void, RootState, unknown, Action<string>> => {
   const rootDir = pathlib.join(process.cwd(), '..', 'branchtest');
-
+  log.info('Initializing files');
   return async (dispatch: Dispatch) => {
     if (db.version !== 1 || schemas.data.length === 0) {
       // database not yet initialized or already done
       // or schemas not yet initialized
+      log.info('Not yet', db.version, schemas.data.length);
       return;
     }
     // Reset in case we run several times
     initialPromises.length = 0;
-    initialFiles.length = 0;
     initialDirectories.length = 0;
     ready = false;
     if (watcher) {
       try {
+        log.info('Closing existing file watcher');
         await watcher.close();
       } catch (ignore) {
         log.info('Error when closing on reset:', ignore);
       }
     }
     try {
+      log.info(`Starting file watcher for ${rootDir}`);
       watcher = chokidar.watch(rootDir, {
         cwd: rootDir,
         ignored: /(^|[/\\])\../ // ignore dotfiles
@@ -116,7 +122,6 @@ export const initFiles = (
             const promise = loadObjectFileToDatabase(path, rootDir, schema);
             if (!ready) {
               initialPromises.push(promise);
-              initialFiles.push({ path, schema });
             } else {
               const file = await promise;
               dispatch(updateDatabase());
@@ -126,10 +131,20 @@ export const initFiles = (
             log.info(`Unable to load ${path}: ${error}`);
             notify.error(`Unable to load ${path}: ${error}`);
           }
-        } else if (!ready) {
-          initialFiles.push({ name: pathlib.basename(path), path, schema });
         } else {
-          dispatch(fileAdded({ name: pathlib.basename(path), path, schema }));
+          log.info('Loading other file:', path);
+          try {
+            const promise = loadOtherFile(path, rootDir);
+            if (!ready) {
+              initialPromises.push(promise);
+            } else {
+              const file = await promise;
+              dispatch(fileAdded(file));
+            }
+          } catch (error) {
+            log.info(`Unable to load ${path}: ${error}`);
+            notify.error(`Unable to load ${path}: ${error}`);
+          }
         }
       });
 
@@ -147,11 +162,23 @@ export const initFiles = (
         ready = true;
         // Wait until all files have been processed before adding directory structure
         try {
-          await Promise.all(initialPromises);
+          log.info('Got initialPromises: ', initialPromises);
+          const initialFiles: FileList = (
+            await Promise.allSettled(initialPromises)
+          )
+            .filter(result => {
+              if (result.status !== 'fulfilled') {
+                log.error('Unable to load file:', result.reason);
+                return false;
+              }
+              return true;
+            })
+            .map((result: any) => result.value);
+          log.info('Got initial files: ', initialFiles);
           dispatch(setFiles(initialFiles, initialDirectories));
           dispatch(updateDatabase());
-          log.info(`Loaded ${initialPromises.length} files to database`);
-          notify.success(`Loaded ${initialPromises.length} files to database`);
+          log.info(`Loaded ${initialFiles.length} files to database`);
+          notify.success(`Loaded ${initialFiles.length} files to database`);
         } catch (error) {
           log.info('Unable to load files', error);
           notify.error(`Unable to load files: ${error}`);
@@ -207,39 +234,11 @@ const canonicalDirname = (path: string): string => {
   return dir;
 };
 
-class FileStateClass {
-  list: Array<File>;
-
-  filesByPath: {
-    [path: string]: File;
-  };
-
-  directoriesByPath: {
-    [path: string]: Directory;
-  };
-
-  structure: Directory;
-
-  base: string; // The directory that contains the .git directory. All paths are relative to this.
-
-  constructor() {
-    this.list = [];
-    this.filesByPath = {};
-    this.directoriesByPath = {};
-    this.structure = {
-      path: '.',
-      subdirectories: [],
-      files: []
-    };
-    this.base = pathlib.join(process.cwd(), '..', 'branchtest');
-  }
-}
-
 const reducer = (
-  state: FileState = new FileStateClass(),
+  state: FileState = new FileState(),
   action: FileAction
 ): FileState => {
-  const newState = new FileStateClass();
+  const newState = new FileState();
   switch (action.type) {
     case 'SET_FILES':
       assertIsSetFilesAction(action);

@@ -11,13 +11,36 @@
 import path from 'path';
 import { app, BrowserWindow } from 'electron';
 import { autoUpdater } from 'electron-updater';
-import log from 'electron-log';
+import elog from 'electron-log';
 import MenuBuilder from './menu';
 
 export default class AppUpdater {
   constructor() {
-    log.transports.file.level = 'info';
-    autoUpdater.logger = log;
+    const devMainLogLevel = 'info';
+    const prodMainLogLevel = 'warn';
+    const mainLogLevel =
+      process.env.NODE_ENV === 'production'
+        ? prodMainLogLevel
+        : devMainLogLevel;
+    const debugLogLevel = 'debug'; // 'silly' level left out unless enabled here
+    elog.transports.console.level = mainLogLevel;
+    elog.transports.file.level = debugLogLevel;
+    if (elog.transports.ipc) {
+      elog.transports.ipc.level = mainLogLevel;
+    }
+    if (elog.transports.remote) {
+      elog.transports.remote.level = mainLogLevel;
+    }
+
+    console.log(
+      `Logging to console at level: ${elog.transports.console.level}`
+    );
+    console.log(
+      `Logging to ${elog.transports.file.getFile().path} at level: ${
+        elog.transports.file.level
+      }`
+    );
+    autoUpdater.logger = elog.scope('autoUpdater');
     autoUpdater.checkForUpdatesAndNotify();
   }
 }

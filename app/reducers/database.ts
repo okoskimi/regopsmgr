@@ -2,9 +2,12 @@ import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
 import elog from 'electron-log';
 
-import { Dispatch, RootState } from '../types/store';
-import { DatabaseState } from '../types/database';
-import { ConfigFileState } from '../types/config';
+import {
+  Dispatch,
+  RootState,
+  ConfigFileState,
+  DatabaseState
+} from '../types/store';
 import { initDatabase as doInitDatabase } from '../services/database';
 import { Notifier } from './notifications';
 
@@ -27,7 +30,7 @@ export const initDatabase = (
   notify: Notifier
 ): ThunkAction<void, RootState, unknown, Action<string>> => {
   return async (dispatch: Dispatch) => {
-    if (Object.keys(configs).length === 0) {
+    if (configs.data.length === 0) {
       // initial call with no data
       return;
     }
@@ -44,7 +47,7 @@ export const initDatabase = (
 };
 
 const reducer = (
-  state: DatabaseState = { version: 0 },
+  state: DatabaseState = new DatabaseState(),
   action: DatabaseAction
 ): DatabaseState => {
   switch (action.type) {

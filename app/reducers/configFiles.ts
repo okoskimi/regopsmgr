@@ -3,8 +3,7 @@ import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
 import elog from 'electron-log';
 
-import { Dispatch, RootState } from '../types/store';
-import { ConfigFileState } from '../types/config';
+import { Dispatch, RootState, ConfigFileState } from '../types/store';
 import { getConfigFiles } from '../services/config';
 import { Notifier } from './notifications';
 
@@ -34,9 +33,9 @@ export const initConfigFiles = (
         path.join(process.cwd(), '..', 'branchtest')
       );
       dispatch(setConfigFiles(configFiles));
-      log.info('Loaded config files', configFiles);
+      log.info('Loaded config files', configFiles.data);
       notify.success(
-        `Loaded ${Object.keys(configFiles).length} configuration files.`
+        `Loaded ${Object.keys(configFiles.data).length} configuration files.`
       );
     } catch (error) {
       log.info('Unable to load config files', error);
@@ -46,7 +45,7 @@ export const initConfigFiles = (
 };
 
 const reducer = (
-  state: ConfigFileState = {},
+  state: ConfigFileState = new ConfigFileState(),
   action: ConfigFileAction
 ): ConfigFileState => {
   switch (action.type) {

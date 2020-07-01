@@ -11,10 +11,7 @@ export interface MenuCategory {
   items: Array<MenuItem>;
   id: string;
 }
-export interface AppMenuState {
-  home: MenuItem;
-  categories: Array<MenuCategory>;
-}
+
 export enum NotificationType {
   SUCCESS = 'success',
   INFO = 'info',
@@ -27,8 +24,4 @@ export interface Notification {
   timestamp: number;
   id: string;
   seen: boolean;
-}
-export interface NotificationState {
-  hasUnseenErrors: boolean;
-  data: Array<Notification>;
 }

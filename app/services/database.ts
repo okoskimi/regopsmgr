@@ -11,7 +11,8 @@ import path from 'path';
 
 import { assertIsDefined } from '../types/util';
 import { Schema, getSchema, isObjectSchema } from '../types/schema';
-import { ConfigFileState, isSchemaConfigFile } from '../types/config';
+import { isSchemaConfigFile } from '../types/config';
+import { ConfigFileState } from '../types/store';
 
 export const database = new Sequelize('sqlite::memory:');
 
@@ -210,8 +211,8 @@ export const initDatabase = async (configs: ConfigFileState) => {
   const prefix = `schema${path.sep}`;
   const associations: Array<any> = [];
   const schemas: { [id: string]: Schema } = {};
-  Object.keys(configs).forEach(filepath => {
-    const configFile = configs[filepath];
+  configs.data.forEach(configFile => {
+    const filepath = configFile.path;
     if (filepath.startsWith(prefix) && isSchemaConfigFile(configFile)) {
       log.info('Creating database model for', filepath);
       const schema = getSchema(configFile.content);

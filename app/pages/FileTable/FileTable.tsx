@@ -93,7 +93,14 @@ const FileTable = (props: Props) => {
   if (!options.title) {
     options.title = 'Files';
   }
-
+  if (!options.columns) {
+    options.columns = [
+      { title: 'Name', field: 'name' },
+      { title: 'Description', field: 'description' },
+      { title: 'Path', field: 'path' }
+    ];
+  }
+  log.info('Columns:', options.columns);
   log.info('Files:', files);
 
   const data = files.list.filter(file => {
@@ -110,11 +117,7 @@ const FileTable = (props: Props) => {
     <div style={{ maxWidth: '100%' }}>
       <MaterialTable
         icons={tableIcons}
-        columns={[
-          { title: 'Name', field: 'name' },
-          { title: 'ID', field: 'id' },
-          { title: 'Description', field: 'description' }
-        ]}
+        columns={options.columns}
         data={data}
         title={options.title}
       />

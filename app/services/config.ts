@@ -8,10 +8,9 @@ import produce from 'immer';
 import elog from 'electron-log';
 
 import { isString } from '../types/util';
-import { AppMenuState } from '../types/app';
-import { SchemaState, getSchema, isObjectSchemaConfig } from '../types/schema';
+import { AppMenuState, SchemaState, ConfigFileState } from '../types/store';
+import { getSchema, isObjectSchemaConfig } from '../types/schema';
 import {
-  ConfigFileState,
   ConfigFile,
   isSchemaConfigFile,
   isMainConfigFIle
@@ -78,11 +77,13 @@ export const getConfigFiles = async (dir: string): Promise<ConfigFileState> => {
               if (filepath.substr(pathPrefix.length) === 'config.yml') {
                 configFile = {
                   type: 'main',
+                  path: filepath.substr(pathPrefix.length),
                   content: YAML.parse(Buffer.from(binaryData).toString('utf8'))
                 };
               } else {
                 configFile = {
                   type: 'schema',
+                  path: filepath.substr(pathPrefix.length),
                   content: YAML.parse(Buffer.from(binaryData).toString('utf8'))
                 };
               }
@@ -97,6 +98,7 @@ export const getConfigFiles = async (dir: string): Promise<ConfigFileState> => {
           default:
             configFile = {
               type: 'binary',
+              path: filepath.substr(pathPrefix.length),
               content: binaryData
             };
         }
@@ -111,16 +113,21 @@ export const getConfigFiles = async (dir: string): Promise<ConfigFileState> => {
       };
     }
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return entryList.reduce((result: any, cur: any) => {
-    if (cur.type === 'blob') {
-      return {
-        ...result,
-        [cur.filepath.substr(pathPrefix.length)]: cur.content
-      };
-    }
-    return result;
-  }, {});
+  return entryList.reduce(
+    (result: any, cur: any) => {
+      if (cur.type === 'blob') {
+        return {
+          byPath: {
+            ...result.byPath,
+            [cur.filepath.substr(pathPrefix.length)]: cur.content
+          },
+          data: [...result.data, cur.content]
+        };
+      }
+      return result;
+    },
+    { byPath: {}, data: [] }
+  );
 };
 
 const commonMetaSchema = ajv.compile({
@@ -175,9 +182,10 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
     byId: {},
     data: []
   };
+  log.debug('Loading schemas from configs: ', configs.data);
   const prefix = `schema${path.sep}`;
-  Object.keys(configs).forEach((filepath: string) => {
-    const configFile = configs[filepath];
+  configs.data.forEach(configFile => {
+    const filepath = configFile.path;
     if (filepath.startsWith(prefix) && isSchemaConfigFile(configFile)) {
       log.info('Validating schema', filepath, configFile);
       const schemaConfig = configFile.content;
@@ -326,7 +334,7 @@ const menuSchema = {
 
 export const loadAppMenu = (configs: ConfigFileState): AppMenuState => {
   const validator = ajv.compile(menuSchema);
-  const mainConfigFile = configs['config.yml'];
+  const mainConfigFile = configs.byPath['config.yml'];
   if (!isMainConfigFIle(mainConfigFile)) {
     throw new Error('config.yml not available');
   }
@@ -341,7 +349,7 @@ export const loadAppMenu = (configs: ConfigFileState): AppMenuState => {
       name: mainConfigFile.content.home.name,
       icon: mainConfigFile.content.home.icon,
       path: mainConfigFile.content.home.path,
-      pathWithParams: `${mainConfigFile.content.home.path}?params=${Buffer.from(
+      pathWithParams: `${mainConfigFile.content.home.path}/${Buffer.from(
         JSON.stringify(
           mainConfigFile.content.home.params
             ? mainConfigFile.content.home.params
@@ -357,7 +365,7 @@ export const loadAppMenu = (configs: ConfigFileState): AppMenuState => {
         name: item.name,
         icon: item.icon,
         path: item.path,
-        pathWithParams: `${item.path}?params=${Buffer.from(
+        pathWithParams: `${item.path}/${Buffer.from(
           JSON.stringify(item.params ? item.params : {})
         ).toString('base64')}`,
         id: uuidv4()

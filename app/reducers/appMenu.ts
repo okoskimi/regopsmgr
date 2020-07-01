@@ -2,9 +2,12 @@ import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
 import elog from 'electron-log';
 
-import { Dispatch, RootState } from '../types/store';
-import { AppMenuState } from '../types/app';
-import { ConfigFileState } from '../types/config';
+import {
+  Dispatch,
+  RootState,
+  AppMenuState,
+  ConfigFileState
+} from '../types/store';
 import { loadAppMenu } from '../services/config';
 import { Notifier } from './notifications';
 
@@ -29,7 +32,7 @@ export const initAppMenu = (
   notify: Notifier
 ): ThunkAction<void, RootState, unknown, Action<string>> => {
   return async (dispatch: Dispatch) => {
-    if (Object.keys(configs).length === 0) {
+    if (configs.data.length === 0) {
       // initial call with no data
       return;
     }
@@ -46,16 +49,7 @@ export const initAppMenu = (
 };
 
 const reducer = (
-  state: AppMenuState = {
-    home: {
-      name: 'Dashboard',
-      icon: '',
-      path: '/',
-      pathWithParams: '/',
-      id: '1'
-    },
-    categories: []
-  },
+  state: AppMenuState = new AppMenuState(),
   action: AppMenuAction
 ): AppMenuState => {
   switch (action.type) {

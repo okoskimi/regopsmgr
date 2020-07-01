@@ -3,14 +3,17 @@ import { SchemaConfig } from './schema';
 
 export interface BinaryConfigFile {
   type: 'binary';
+  path: string;
   content: Uint8Array;
 }
 export interface SchemaConfigFile {
   type: 'schema';
+  path: string;
   content: SchemaConfig;
 }
 export interface MainConfigFile {
   type: 'main';
+  path: string;
   content: MainConfig;
 }
 export interface MainConfig {
@@ -26,6 +29,3 @@ export const isSchemaConfigFile = (
 export const isMainConfigFIle = (file: ConfigFile): file is MainConfigFile => {
   return file.type === 'main';
 };
-export interface ConfigFileState {
-  [path: string]: ConfigFile;
-}

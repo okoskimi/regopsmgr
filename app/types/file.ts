@@ -1,27 +1,19 @@
 import { Schema } from './schema';
 
-export interface File {
+export interface FileEntry {
   path: string;
   id?: string;
   shortId?: string;
   name?: string;
   description?: string;
   content?: object;
+  created?: Date;
+  modified?: Date;
+  uncommittedChanges?: boolean;
   schema?: Schema;
 }
-export interface Directory {
+export interface DirectoryEntry {
   path: string;
-  subdirectories: Array<Directory>;
-  files: Array<File>;
-}
-export interface FileState {
-  list: Array<File>;
-  filesByPath: {
-    [path: string]: File;
-  };
-  directoriesByPath: {
-    [path: string]: Directory;
-  };
-  structure: Directory;
-  base: string; // The directory that contains the .git directory. All paths are relative to this.
+  subdirectories: Array<DirectoryEntry>;
+  files: Array<FileEntry>;
 }
