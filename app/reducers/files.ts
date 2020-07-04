@@ -1,25 +1,31 @@
+/*
+
 import { Action } from 'redux';
 import { ThunkAction } from 'redux-thunk';
 import chokidar from 'chokidar';
 import pathlib from 'path';
-import { produce } from 'immer';
-import { AssertionError } from 'assert';
+// import { produce } from 'immer';
+// import { AssertionError } from 'assert';
 import elog from 'electron-log';
 
 import {
   Dispatch,
   RootState,
-  FileState,
   SchemaState,
   DatabaseState
 } from '../types/store';
-import { FileEntry } from '../types/file';
+// import { FileEntry } from '../types/file';
 import { Schema, isObjectSchema } from '../types/schema';
 import { Notifier } from './notifications';
-import { updateDatabase } from './database';
-import { loadObjectFileToDatabase, loadOtherFile } from '../services/files';
+import { updateDatabase, databaseReady } from './database';
+import {
+  loadObjectFileToDatabase,
+  loadOtherFileToDatabase,
+  loadDirectoryToDatabase
+} from '../services/files';
 
 const log = elog.scope('reducers/files');
+
 
 interface FileEventAction {
   type: 'FILE_ADDED' | 'FILE_CHANGED' | 'FILE_REMOVED';
@@ -39,7 +45,10 @@ interface SetFilesAction {
 
 type FileAction = FileEventAction | DirectoryEventAction | SetFilesAction;
 
+
 let watcher: chokidar.FSWatcher | null = null;
+
+
 
 export const setFiles = (
   files: FileList,
@@ -64,8 +73,9 @@ export const directoryAdded = (path: string): FileAction => ({
 
 type FileList = Array<FileEntry>;
 
-const initialPromises: Array<Promise<FileEntry>> = [];
 const initialDirectories: Array<string> = [];
+
+const initialPromises: Array<Promise<void>> = [];
 let ready = false;
 
 const selectSchema = (
@@ -95,9 +105,12 @@ export const initFiles = (
       return;
     }
     // Reset in case we run several times
+
     initialPromises.length = 0;
     initialDirectories.length = 0;
+
     ready = false;
+
     if (watcher) {
       try {
         log.info('Closing existing file watcher');
@@ -123,37 +136,53 @@ export const initFiles = (
             if (!ready) {
               initialPromises.push(promise);
             } else {
-              const file = await promise;
+              await promise;
               dispatch(updateDatabase());
-              dispatch(fileAdded(file));
+              // dispatch(fileAdded(file));
             }
           } catch (error) {
-            log.info(`Unable to load ${path}: ${error}`);
-            notify.error(`Unable to load ${path}: ${error}`);
+            log.info(`Unable to load /${path}: ${error}`);
+            notify.error(`Unable to load /${path}: ${error}`);
           }
         } else {
           log.info('Loading other file:', path);
           try {
-            const promise = loadOtherFile(path, rootDir);
+            const promise = loadOtherFileToDatabase(path, rootDir);
             if (!ready) {
               initialPromises.push(promise);
             } else {
-              const file = await promise;
-              dispatch(fileAdded(file));
+              await promise;
+              dispatch(updateDatabase());
+              // dispatch(fileAdded(file));
             }
           } catch (error) {
-            log.info(`Unable to load ${path}: ${error}`);
-            notify.error(`Unable to load ${path}: ${error}`);
+            log.info(`Unable to load /${path}: ${error}`);
+            notify.error(`Unable to load /${path}: ${error}`);
           }
         }
       });
 
-      watcher.on('addDir', path => {
+      watcher.on('addDir', async path => {
         log.info('addDir', path);
+
         if (!ready) {
           initialDirectories.push(path);
         } else {
           dispatch(directoryAdded(path));
+        }
+
+        try {
+          const promise = loadDirectoryToDatabase(path);
+          if (!ready) {
+            initialPromises.push(promise);
+          } else {
+            await promise;
+            dispatch(updateDatabase());
+            // dispatch(fileAdded(file));
+          }
+        } catch (error) {
+          log.info(`Unable to load directory /${path}: ${error}`);
+          notify.error(`Unable to load directory /${path}: ${error}`);
         }
       });
 
@@ -163,24 +192,28 @@ export const initFiles = (
         // Wait until all files have been processed before adding directory structure
         try {
           log.info('Got initialPromises: ', initialPromises);
-          const initialFiles: FileList = (
-            await Promise.allSettled(initialPromises)
-          )
-            .filter(result => {
-              if (result.status !== 'fulfilled') {
-                log.error('Unable to load file:', result.reason);
-                return false;
-              }
-              return true;
-            })
-            .map((result: any) => result.value);
-          log.info('Got initial files: ', initialFiles);
-          dispatch(setFiles(initialFiles, initialDirectories));
-          dispatch(updateDatabase());
-          log.info(`Loaded ${initialFiles.length} files to database`);
-          notify.success(`Loaded ${initialFiles.length} files to database`);
+          let successCount = 0;
+          let failureCount = 0;
+          const results = await Promise.allSettled(initialPromises);
+          results.forEach(result => {
+            if (result.status !== 'fulfilled') {
+              log.error('Unable to load file:', result.reason);
+              failureCount += 1;
+            } else {
+              successCount += 1;
+            }
+          });
+
+          // dispatch(setFiles(initialFiles, initialDirectories));
+          dispatch(databaseReady());
+          log.info(`Loaded ${successCount} files to database`);
+          notify.success(`Loaded ${successCount} files to database`);
+          if (failureCount > 0) {
+            log.error(`Failed to load ${failureCount} files to database`);
+            notify.error(`Failed to load ${failureCount} files to database`);
+          }
         } catch (error) {
-          log.info('Unable to load files', error);
+          log.error('Unable to load files', error);
           notify.error(`Unable to load files: ${error}`);
         }
       });
@@ -190,6 +223,7 @@ export const initFiles = (
     }
   };
 };
+
 
 export function assertIsSetFilesAction(
   val: FileAction
@@ -224,15 +258,6 @@ export function assertIsDirectoryEventAction(
     });
   }
 }
-
-// Convert dot to empty string
-const canonicalDirname = (path: string): string => {
-  const dir = pathlib.dirname(path);
-  if (dir === '.') {
-    return '';
-  }
-  return dir;
-};
 
 const reducer = (
   state: FileState = new FileState(),
@@ -307,3 +332,7 @@ const reducer = (
 };
 
 export default reducer;
+
+
+export default {};
+*/

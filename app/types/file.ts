@@ -1,3 +1,4 @@
+/*
 import { Schema } from './schema';
 
 export interface FileEntry {
@@ -17,3 +18,4 @@ export interface DirectoryEntry {
   subdirectories: Array<DirectoryEntry>;
   files: Array<FileEntry>;
 }
+*/

@@ -4,7 +4,8 @@ import {
   Model,
   ModelAttributes,
   ModelOptions,
-  Association
+  Association,
+  Op
 } from 'sequelize';
 import elog from 'electron-log';
 import path from 'path';
@@ -13,6 +14,7 @@ import { assertIsDefined } from '../types/util';
 import { Schema, getSchema, isObjectSchema } from '../types/schema';
 import { isSchemaConfigFile } from '../types/config';
 import { ConfigFileState } from '../types/store';
+import { FILE_MODEL_ID, DIR_MODEL_ID } from '../constants/database';
 
 export const database = new Sequelize('sqlite::memory:');
 
@@ -207,6 +209,29 @@ const isModelWithAssociations = (
   return m.associationsByName !== undefined;
 };
 
+const fileModel = {
+  path: {
+    type: DataTypes.TEXT,
+    primaryKey: true
+  },
+  id: DataTypes.STRING,
+  shortId: DataTypes.STRING,
+  name: DataTypes.STRING,
+  description: DataTypes.TEXT,
+  content: DataTypes.JSON,
+  created: DataTypes.DATE,
+  modified: DataTypes.DATE,
+  uncommittedChanges: DataTypes.BOOLEAN,
+  schema: DataTypes.STRING
+};
+
+const dirModel = {
+  path: {
+    type: DataTypes.TEXT,
+    primaryKey: true
+  }
+};
+
 export const initDatabase = async (configs: ConfigFileState) => {
   const prefix = `schema${path.sep}`;
   const associations: Array<any> = [];
@@ -318,7 +343,7 @@ export const initDatabase = async (configs: ConfigFileState) => {
                 ...prop,
                 filepath,
                 name: key,
-                source: schema.name
+                source: schema.$id
               });
               break;
             case 'object':
@@ -341,7 +366,7 @@ export const initDatabase = async (configs: ConfigFileState) => {
               throw new Error(`Unknown property type ${prop.type}`);
           }
         }); // End of forEach that walks through properties
-        database.define(schema.name, model, modelOptions);
+        database.define(schema.$id, model, modelOptions);
       } // End of if that chooses all object schemas
     } // End of if that chooses all schema configuration files
   }); // End of forEach that walks through configuration files
@@ -351,12 +376,12 @@ export const initDatabase = async (configs: ConfigFileState) => {
         `Target model with schema $id ${a.target} for relationship ${a.name} in ${a.filepath} not found`
       );
     }
-    const targetModel = database.models[schemas[a.target].name];
+    const targetModel = database.models[schemas[a.target].$id];
     log.info('Target model', targetModel);
     if (!targetModel) {
       throw new Error(
-        `Target model with schema name ${
-          schemas[a.target].name
+        `Target model with schema $id ${
+          schemas[a.target].$id
         } for relationship ${a.name} in ${a.filepath} does not exist`
       );
     }
@@ -410,6 +435,17 @@ export const initDatabase = async (configs: ConfigFileState) => {
         );
     }
   }); // End of forEach that walks through associations
+  // Define file model
+  const FileModel = database.define(FILE_MODEL_ID, fileModel, {
+    timestamps: false
+  });
+  const DirModel = database.define(DIR_MODEL_ID, dirModel, {
+    timestamps: false
+  });
+  // Set foreign key to make sure we can manually set the references
+  FileModel.belongsTo(DirModel, { as: 'dir', foreignKey: 'dirId' });
+  DirModel.hasMany(FileModel, { as: 'files' });
+
   await database.sync({ force: true }); // Creates database tables and indexes
 };
 
@@ -419,7 +455,7 @@ export const setAssociation = async (
   property: string,
   target: string | Array<string>
 ) => {
-  const model = database.models[sourceSchema.name];
+  const model = database.models[sourceSchema.$id];
   if (!isModelWithAssociations(model)) {
     throw new Error(
       `Internal error: associations missing for model for schema ${sourceSchema.name}`
@@ -432,4 +468,61 @@ export const setAssociation = async (
     );
   }
   await association.set(sourceInstance, target);
+};
+
+type SearchQuery = Array<{
+  [field: string]: {
+    [op2: string]: string;
+  };
+}>;
+
+interface Query {
+  where: {
+    [op1: string]: SearchQuery;
+  };
+  limit?: number;
+  offset?: number;
+}
+
+export interface LoadResult {
+  data: Array<any>;
+  page: number;
+  totalCount: number;
+}
+
+export const loadData = async (
+  modelId: string,
+  page: number,
+  pageSize: number,
+  searchTerm: string,
+  searchColumns: Array<{ field: string }>
+): Promise<LoadResult> => {
+  const model = database.models[modelId];
+  if (!model) {
+    throw new Error(`Model ${model} not found in database`);
+  }
+  const searchQuery: SearchQuery = [];
+  const query: Query = {
+    where: {
+      [Op.or]: searchQuery
+    }
+  };
+  searchColumns.forEach(column => {
+    searchQuery.push({
+      [column.field]: {
+        [Op.like]: `%${searchTerm}%`
+      }
+    });
+  });
+  // TODO: We could cache this as it is likely the same for multiple consecutive queries
+  // Need to use database state (version) when caching though
+  const totalCount = await model.count(query);
+  query.limit = pageSize;
+  query.offset = page * pageSize;
+  const data = await model.findAll(query);
+  return {
+    data,
+    page,
+    totalCount
+  };
 };

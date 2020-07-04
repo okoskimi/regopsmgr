@@ -22,8 +22,7 @@ import Header from './Header';
 import { RootState } from '../types/store';
 import { initConfigFiles as _initConfigFiles } from '../reducers/configFiles';
 import { initSchemas as _initSchemas } from '../reducers/schemas';
-import { initDatabase as _initDatabase } from '../reducers/database';
-import { initFiles as _initFiles } from '../reducers/files';
+import { initDatabase as _initDatabase, loadFilesToDatabase as _loadFilesToDatabase } from '../reducers/database';
 import { initAppMenu as _initAppMenu } from '../reducers/appMenu';
 import { useNotification } from '../reducers/notifications';
 import { drawerWidth } from '../constants/layout'
@@ -93,7 +92,7 @@ const mapDispatch = {
   initSchemas: _initSchemas,
   initAppMenu: _initAppMenu,
   initDatabase: _initDatabase,
-  initFiles: _initFiles
+  loadFilesToDatabase: _loadFilesToDatabase
 };
 
 const connector = connect(mapState, mapDispatch);
@@ -101,7 +100,7 @@ const connector = connect(mapState, mapDispatch);
 type Props = ConnectedProps<typeof connector> & OwnProps;
 
 function App(props: Props) {
-  const { classes, configFiles, schemas, database, initConfigFiles, initSchemas, initAppMenu, initDatabase, initFiles } = props;
+  const { classes, configFiles, schemas, database, initConfigFiles, initSchemas, initAppMenu, initDatabase, loadFilesToDatabase } = props;
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const notify  = useNotification();
 
@@ -121,8 +120,8 @@ function App(props: Props) {
   }, [configFiles]);
 
   useEffect(() => {
-    log.info('Calling initFiles');
-    initFiles(database, schemas, notify);
+    log.info('Calling loadFilesToDatabase');
+    loadFilesToDatabase(database, schemas, notify);
   }, [database, schemas]);
 
   const handleDrawerToggle = () => {

@@ -29,7 +29,7 @@ export interface Schema extends SchemaBase {
 }
 export const defaultSchema: Schema = {
   type: 'default',
-  $id: 'schemaless',
+  $id: '_default',
   name: 'Schemaless',
   collectiveName: 'Schemaless',
   description: 'Default schema used for files which do not match any schema',

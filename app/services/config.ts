@@ -192,6 +192,11 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
       if (!isString(schemaConfig.type)) {
         throw new Error(`Schema at ${filepath} has an invalid type`);
       }
+      if (schemaConfig.$id.startsWith('_')) {
+        throw new Error(
+          `Schema at ${filepath} has illegal $id ${schemaConfig.$id} - schema $id may not start with an underscore`
+        );
+      }
       const validator = metaSchemas[schemaConfig.type];
       if (!validator) {
         throw new Error(`Schema at ${filepath} has an unsupported type`);

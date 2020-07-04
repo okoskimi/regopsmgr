@@ -1,3 +1,4 @@
+/* eslint-disable react/jsx-curly-newline */
 /* eslint-disable react/jsx-props-no-spreading */
 /* eslint-disable react/display-name */
 import React, { forwardRef } from 'react';
@@ -29,6 +30,8 @@ import Search from '@material-ui/icons/Search';
 import ViewColumn from '@material-ui/icons/ViewColumn';
 
 import { RootState } from '../../types/store';
+import { loadData } from '../../services/database';
+import { FILE_MODEL_ID } from '../../constants/database';
 
 const log = elog.scope('pages/FileTable');
 
@@ -67,7 +70,7 @@ interface OwnProps extends WithStyles<typeof styles> {
   onDrawerToggle: () => void;
 }
 const mapState = (state: RootState) => ({
-  files: state.files
+  db: state.database
 });
 const mapDispatch = {
   markAllAsSeen: null
@@ -76,9 +79,9 @@ const connector = connect(mapState, mapDispatch);
 type Props = ConnectedProps<typeof connector> & OwnProps;
 
 const FileTable = (props: Props) => {
-  const { files } = props;
+  const { db } = props;
   const { params } = useParams();
-
+  log.debug('Database version:', db.version);
   let options: any = {};
   if (params !== undefined) {
     log.info('We got params:', params);
@@ -101,16 +104,6 @@ const FileTable = (props: Props) => {
     ];
   }
   log.info('Columns:', options.columns);
-  log.info('Files:', files);
-
-  const data = files.list.filter(file => {
-    if (options.files) {
-      return options.files.test(file.path);
-    }
-    return true;
-  });
-
-  log.info('Data:', data);
 
   // const { notifications, markAllAsSeen } = props;
   return (
@@ -118,7 +111,15 @@ const FileTable = (props: Props) => {
       <MaterialTable
         icons={tableIcons}
         columns={options.columns}
-        data={data}
+        data={query =>
+          loadData(
+            FILE_MODEL_ID,
+            query.page,
+            query.pageSize,
+            query.search,
+            options.columns
+          )
+        }
         title={options.title}
       />
     </div>
