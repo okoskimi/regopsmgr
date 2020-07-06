@@ -17,6 +17,7 @@ export interface ObjectSchemaConfig extends SchemaConfig {
       [name: string]: string | object | number | boolean;
     };
   };
+  uiSchema?: any;
   validation?: string;
 }
 export const isObjectSchemaConfig = (
@@ -46,6 +47,7 @@ export interface ObjectSchema extends Schema {
       [name: string]: string | object | number | boolean;
     };
   };
+  uiSchema?: any;
   validation?: string;
 }
 export const isObjectSchema = (schema: Schema): schema is ObjectSchema => {
@@ -60,11 +62,12 @@ export const getSchema = (config: SchemaConfig): Schema => {
         id: {
           type: 'string',
           maxLength: 255,
+          readOnly: true, // This is just for UI purposes
           // UUIDv4 regex
           pattern:
-            '/^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i'
+            '^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-4[0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$'
         },
-        shortId: { type: 'string', maxLength: 255 },
+        shortId: { type: 'string', maxLength: 255, readOnly: true }, // ReadOnly is just for UI purposes
         name: { type: 'string', maxLength: 255 }
       },
       files: new RegExp(config.files)

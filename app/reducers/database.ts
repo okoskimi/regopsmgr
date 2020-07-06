@@ -13,12 +13,12 @@ import {
   DatabaseState,
   SchemaState
 } from '../types/store';
-import { initDatabase as doInitDatabase } from '../services/database';
+import { initDatabase as doInitDatabase } from '../services/db/init';
 import {
   loadObjectFileToDatabase,
   loadOtherFileToDatabase,
   loadDirectoryToDatabase
-} from '../services/files';
+} from '../services/db/dbfiles';
 
 const log = elog.scope('reducers/database');
 

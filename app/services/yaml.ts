@@ -4,7 +4,7 @@ import elog from 'electron-log';
 
 import { assertIsDefined } from '../types/util';
 
-export const log = elog.scope('services/yaml');
+const log = elog.scope('services/yaml');
 
 const copyComments = (fromDoc: YAML.Document, toDoc: YAML.Document) => {
   assertIsDefined(fromDoc.contents);
@@ -180,3 +180,5 @@ export const saveYamlFile = async (filepath: string, modifiedObj: any) => {
     await fsp.writeFile(filepath, YAML.stringify(modifiedObj));
   }
 };
+
+export default {};

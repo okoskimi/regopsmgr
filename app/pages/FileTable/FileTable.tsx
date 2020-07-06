@@ -1,10 +1,13 @@
+/* eslint-disable no-console */
+/* eslint-disable no-alert */
+/* eslint-disable no-restricted-globals */
 /* eslint-disable react/jsx-curly-newline */
 /* eslint-disable react/jsx-props-no-spreading */
 /* eslint-disable react/display-name */
 import React, { forwardRef } from 'react';
 import { ConnectedProps, connect } from 'react-redux';
-import { useParams } from 'react-router-dom';
-import MaterialTable, { Icons } from 'material-table';
+import { useParams, useHistory } from 'react-router-dom';
+import MaterialTable, { Action, Icons } from 'material-table';
 import elog from 'electron-log';
 
 import {
@@ -30,7 +33,7 @@ import Search from '@material-ui/icons/Search';
 import ViewColumn from '@material-ui/icons/ViewColumn';
 
 import { RootState } from '../../types/store';
-import { loadData } from '../../services/database';
+import { loadData, convertFilter } from '../../services/db/query';
 import { FILE_MODEL_ID } from '../../constants/database';
 
 const log = elog.scope('pages/FileTable');
@@ -70,7 +73,8 @@ interface OwnProps extends WithStyles<typeof styles> {
   onDrawerToggle: () => void;
 }
 const mapState = (state: RootState) => ({
-  db: state.database
+  db: state.database,
+  schemas: state.schemas
 });
 const mapDispatch = {
   markAllAsSeen: null
@@ -79,48 +83,88 @@ const connector = connect(mapState, mapDispatch);
 type Props = ConnectedProps<typeof connector> & OwnProps;
 
 const FileTable = (props: Props) => {
-  const { db } = props;
-  const { params } = useParams();
+  const { db, schemas } = props;
+  const { params: rawParams } = useParams();
+  const history = useHistory();
   log.debug('Database version:', db.version);
-  let options: any = {};
-  if (params !== undefined) {
-    log.info('We got params:', params);
-    options = JSON.parse(Buffer.from(params, 'base64').toString());
-    log.info('Parsed params to:', options);
-    if (options.files) {
-      options.files = new RegExp(options.files);
+  let params: any = {};
+  if (rawParams !== undefined) {
+    log.info('We got params:', rawParams);
+    params = JSON.parse(decodeURIComponent(rawParams));
+    log.info('Parsed params to:', params);
+    if (params.filter) {
+      params.filter = convertFilter(params.filter);
     }
   } else {
     log.info('No params provided');
   }
-  if (!options.title) {
-    options.title = 'Files';
+  if (!params.title) {
+    params.title = 'Files';
   }
-  if (!options.columns) {
-    options.columns = [
+  if (!params.columns) {
+    params.columns = [
       { title: 'Name', field: 'name' },
       { title: 'Description', field: 'description' },
       { title: 'Path', field: 'path' }
     ];
+  } else {
+    // Disable filtering for columns that use deep properties that are not visible to SQL
+    params.columns = params.columns.map((column: any) => {
+      if (column.field.indexOf('.') < 0) {
+        return column;
+      }
+      return { ...column, filtering: false };
+    });
   }
-  log.info('Columns:', options.columns);
+  log.info('Columns:', params.columns);
 
   // const { notifications, markAllAsSeen } = props;
   return (
     <div style={{ maxWidth: '100%' }}>
       <MaterialTable
         icons={tableIcons}
-        columns={options.columns}
-        data={query =>
-          loadData(
+        columns={params.columns}
+        data={query => {
+          log.info('MaterialTable data request:', query);
+          return loadData(
             FILE_MODEL_ID,
             query.page,
             query.pageSize,
             query.search,
-            options.columns
-          )
-        }
-        title={options.title}
+            params.columns,
+            query.orderBy,
+            query.orderDirection,
+            query.filters,
+            params.filter
+          );
+        }}
+        title={params.title}
+        options={{ filtering: true }}
+        actions={[
+          (rowData: any): Action<any> => {
+            const schema = schemas.byId[rowData.schema];
+            return {
+              icon: Edit,
+              tooltip: 'Edit Record',
+              onClick: (event, eventRowData) => {
+                const linkParams = {
+                  schema: eventRowData.schema,
+                  path: eventRowData.path,
+                  uiSchema: undefined
+                };
+                if (params.uiSchemas) {
+                  linkParams.uiSchema = params.uiSchemas[eventRowData.schema];
+                }
+                history.push(
+                  `/EditRecord/${encodeURIComponent(
+                    JSON.stringify(linkParams)
+                  )}`
+                );
+              },
+              hidden: !schema || schema.type !== 'object'
+            };
+          }
+        ]}
       />
     </div>
   );

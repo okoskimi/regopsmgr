@@ -3,7 +3,7 @@ import pathlib from 'path';
 import git, { ReadCommitResult } from 'isomorphic-git';
 import elog from 'electron-log';
 
-export const log = elog.scope('services/git');
+const log = elog.scope('services/git');
 
 interface GitStatus {
   modified: number;
@@ -97,3 +97,5 @@ export const getGitStatus = async (
   }
   return statusResult;
 };
+
+export default {};

@@ -245,7 +245,10 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
             // Needed to use simplified syntax for schema validation, original below
             // '/^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i'
           };
-          properties.shortId = { type: 'string', maxLength: 255 };
+          properties.shortId = {
+            type: 'string',
+            maxLength: 255
+          };
           properties.name = { type: 'string', maxLength: 255 };
 
           Object.keys(draft.properties).forEach(key => {
@@ -354,13 +357,13 @@ export const loadAppMenu = (configs: ConfigFileState): AppMenuState => {
       name: mainConfigFile.content.home.name,
       icon: mainConfigFile.content.home.icon,
       path: mainConfigFile.content.home.path,
-      pathWithParams: `${mainConfigFile.content.home.path}/${Buffer.from(
+      pathWithParams: `${mainConfigFile.content.home.path}/${encodeURIComponent(
         JSON.stringify(
           mainConfigFile.content.home.params
             ? mainConfigFile.content.home.params
             : {}
         )
-      ).toString('base64')}`,
+      )}`,
       id: uuidv4()
     },
     categories: mainConfigFile.content.categories.map(category => ({
@@ -370,9 +373,9 @@ export const loadAppMenu = (configs: ConfigFileState): AppMenuState => {
         name: item.name,
         icon: item.icon,
         path: item.path,
-        pathWithParams: `${item.path}/${Buffer.from(
+        pathWithParams: `${item.path}/${encodeURIComponent(
           JSON.stringify(item.params ? item.params : {})
-        ).toString('base64')}`,
+        )}`,
         id: uuidv4()
       }))
     }))

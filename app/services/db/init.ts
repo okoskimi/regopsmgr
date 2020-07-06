@@ -1,24 +1,21 @@
 import {
-  Sequelize,
   DataTypes,
   Model,
   ModelAttributes,
   ModelOptions,
-  Association,
-  Op
+  Association
 } from 'sequelize';
 import elog from 'electron-log';
 import path from 'path';
 
-import { assertIsDefined } from '../types/util';
-import { Schema, getSchema, isObjectSchema } from '../types/schema';
-import { isSchemaConfigFile } from '../types/config';
-import { ConfigFileState } from '../types/store';
-import { FILE_MODEL_ID, DIR_MODEL_ID } from '../constants/database';
+import { assertIsDefined } from '../../types/util';
+import { Schema, getSchema, isObjectSchema } from '../../types/schema';
+import { isSchemaConfigFile } from '../../types/config';
+import { ConfigFileState } from '../../types/store';
+import { FILE_MODEL_ID, DIR_MODEL_ID } from '../../constants/database';
+import { database } from '.';
 
-export const database = new Sequelize('sqlite::memory:');
-
-const log = elog.scope('services/database');
+const log = elog.scope('services/db/init');
 
 type ModelType = typeof Model;
 
@@ -209,25 +206,29 @@ const isModelWithAssociations = (
   return m.associationsByName !== undefined;
 };
 
+// Set SQLite specific collation hack
+const COLLATED_STRING = `${DataTypes.STRING} COLLATE NOCASE`;
+const COLLATED_TEXT = `${DataTypes.TEXT} COLLATE NOCASE`;
+
 const fileModel = {
   path: {
-    type: DataTypes.TEXT,
+    type: COLLATED_TEXT,
     primaryKey: true
   },
-  id: DataTypes.STRING,
-  shortId: DataTypes.STRING,
-  name: DataTypes.STRING,
-  description: DataTypes.TEXT,
+  id: COLLATED_STRING,
+  shortId: COLLATED_STRING,
+  name: COLLATED_STRING,
+  description: COLLATED_TEXT,
   content: DataTypes.JSON,
   created: DataTypes.DATE,
   modified: DataTypes.DATE,
   uncommittedChanges: DataTypes.BOOLEAN,
-  schema: DataTypes.STRING
+  schema: COLLATED_STRING
 };
 
 const dirModel = {
   path: {
-    type: DataTypes.TEXT,
+    type: COLLATED_TEXT,
     primaryKey: true
   }
 };
@@ -253,8 +254,8 @@ export const initDatabase = async (configs: ConfigFileState) => {
             type: DataTypes.JSON,
             allowNull: false
           },
-          shortId: DataTypes.STRING,
-          name: DataTypes.STRING,
+          shortId: COLLATED_STRING,
+          name: COLLATED_STRING,
           created: DataTypes.DATE,
           modified: DataTypes.DATE
         };
@@ -284,9 +285,9 @@ export const initDatabase = async (configs: ConfigFileState) => {
             case 'string':
               // Enumeration values are assumed to be short strings (max 255 characters).
               if ('enum' in prop) {
-                model[key] = DataTypes.STRING;
+                model[key] = COLLATED_STRING;
               } else {
-                model[key] = DataTypes.TEXT;
+                model[key] = COLLATED_TEXT;
               }
               if (prop.index === true) {
                 modelOptions.indexes.push({
@@ -468,61 +469,4 @@ export const setAssociation = async (
     );
   }
   await association.set(sourceInstance, target);
-};
-
-type SearchQuery = Array<{
-  [field: string]: {
-    [op2: string]: string;
-  };
-}>;
-
-interface Query {
-  where: {
-    [op1: string]: SearchQuery;
-  };
-  limit?: number;
-  offset?: number;
-}
-
-export interface LoadResult {
-  data: Array<any>;
-  page: number;
-  totalCount: number;
-}
-
-export const loadData = async (
-  modelId: string,
-  page: number,
-  pageSize: number,
-  searchTerm: string,
-  searchColumns: Array<{ field: string }>
-): Promise<LoadResult> => {
-  const model = database.models[modelId];
-  if (!model) {
-    throw new Error(`Model ${model} not found in database`);
-  }
-  const searchQuery: SearchQuery = [];
-  const query: Query = {
-    where: {
-      [Op.or]: searchQuery
-    }
-  };
-  searchColumns.forEach(column => {
-    searchQuery.push({
-      [column.field]: {
-        [Op.like]: `%${searchTerm}%`
-      }
-    });
-  });
-  // TODO: We could cache this as it is likely the same for multiple consecutive queries
-  // Need to use database state (version) when caching though
-  const totalCount = await model.count(query);
-  query.limit = pageSize;
-  query.offset = page * pageSize;
-  const data = await model.findAll(query);
-  return {
-    data,
-    page,
-    totalCount
-  };
 };
