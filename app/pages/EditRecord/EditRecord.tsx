@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ConnectedProps, connect } from 'react-redux';
+import { ConnectedProps, connect, useDispatch } from 'react-redux';
 import { useParams, useHistory } from 'react-router-dom';
 import { promises as fsp } from 'fs';
 import pathlib from 'path';
@@ -12,25 +12,36 @@ import {
   withStyles,
   WithStyles
 } from '@material-ui/core/styles';
+import Button from '@material-ui/core/Button';
 
 import { RootState } from '../../types/store';
 import {
-  loadYamlFile,
   fullCanonicalPath,
+  relativePathFromCanonical,
   extractAssociationsFromData,
   AssociationDataMap,
   extractAssociationsFromSchema,
   AssociationSchemaMap
 } from '../../services/files';
 import { ObjectSchema, isObjectSchema } from '../../types/schema';
-import { saveYamlFile } from '../../services/yaml';
+import { saveYamlFile, loadYamlFile } from '../../services/yaml';
+import { updateDatabase } from '../../reducers/database';
+import { loadObjectFileToDatabase } from '../../services/db/dbfiles';
 
 const log = elog.scope('pages/EditRecord');
 
-const styles = (_theme: Theme) =>
+const styles = (theme: Theme) =>
   createStyles({
-    secondaryBar: {
-      zIndex: 0
+    root: {
+      marginLeft: theme.spacing(2),
+      marginRight: theme.spacing(2),
+      marginTop: theme.spacing(1),
+      marginBottom: theme.spacing(1)
+    },
+    buttons: {
+      '& > *': {
+        margin: theme.spacing(1)
+      }
     }
   });
 
@@ -49,9 +60,10 @@ const connector = connect(mapState, mapDispatch);
 type Props = ConnectedProps<typeof connector> & OwnProps;
 
 const EditRecord = (props: Props) => {
-  const { db, schemas } = props;
+  const { db, schemas, classes } = props;
   const { params: rawParams } = useParams();
   const history = useHistory();
+  const dispatch = useDispatch();
 
   interface FileData {
     contentObj?: any;
@@ -74,9 +86,11 @@ const EditRecord = (props: Props) => {
   } else {
     log.info('No params provided');
   }
-  const schema = schemas.byId[params.schema];
+  const schema = schemas.byId[params.schemaId];
 
   // This is run for every render but only updates data if file was changed
+  // Note that it does not react to database updates, so external changes to file won't trigger update if there is no rerender
+  // This prevents (not tested) form from changing in mid-edit if file is changed
   useEffect(() => {
     const loadFile = async () => {
       const baseDir = pathlib.join(process.cwd(), '..', 'branchtest');
@@ -130,37 +144,53 @@ const EditRecord = (props: Props) => {
     uiSchema = fileData.contentSchema.uiSchema;
   }
 
-  const saveAndExit = (data: any) => {
+  // Save to file and database
+  const saveData = async (data: any) => {
     const baseDir = pathlib.join(process.cwd(), '..', 'branchtest');
     const fullPath = fullCanonicalPath(baseDir, params.path);
-    saveYamlFile(fullPath, data);
-    history.goBack();
+    // This suppresses the file change event so we need to explicitly save to database
+    // Explicit saving is more reliable than relying on file change events
+    await saveYamlFile(fullPath, data);
+    if (fileData.contentSchema) {
+      await loadObjectFileToDatabase(
+        relativePathFromCanonical(params.path),
+        baseDir,
+        fileData.contentSchema
+      );
+      dispatch(updateDatabase());
+    } else {
+      log.error(`Schema for ${params.path} is not an object schema!`);
+    }
   };
 
   console.log('UI Schema:', uiSchema);
 
   return (
-    <Form
-      schema={fileData.contentSchema as any}
-      formData={fileData.contentObj}
-      uiSchema={uiSchema}
-      onSubmit={event => {
-        console.log('Event:', event);
-        saveAndExit(event.formData);
-      }}
-    >
-      <div>
-        <button type="submit">Save</button>
-        <button
-          type="button"
-          onClick={() => {
-            history.goBack();
-          }}
-        >
-          Cancel
-        </button>
-      </div>
-    </Form>
+    <div className={classes.root}>
+      <Form
+        schema={fileData.contentSchema as any}
+        formData={fileData.contentObj}
+        uiSchema={uiSchema}
+        onSubmit={event => {
+          saveData(event.formData);
+          history.goBack();
+        }}
+      >
+        <div className={classes.buttons}>
+          <Button type="submit" variant="contained" color="primary">
+            Save
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              history.goBack();
+            }}
+          >
+            Cancel
+          </Button>
+        </div>
+      </Form>
+    </div>
   );
 };
 

@@ -4,7 +4,7 @@
 /* eslint-disable react/jsx-curly-newline */
 /* eslint-disable react/jsx-props-no-spreading */
 /* eslint-disable react/display-name */
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useState, useEffect } from 'react';
 import { ConnectedProps, connect } from 'react-redux';
 import { useParams, useHistory } from 'react-router-dom';
 import MaterialTable, { Action, Icons } from 'material-table';
@@ -64,8 +64,9 @@ const tableIcons: Icons = {
 
 const styles = (_theme: Theme) =>
   createStyles({
-    secondaryBar: {
-      zIndex: 0
+    root: {
+      maxWidth: '100%',
+      margin: 0
     }
   });
 
@@ -83,10 +84,13 @@ const connector = connect(mapState, mapDispatch);
 type Props = ConnectedProps<typeof connector> & OwnProps;
 
 const FileTable = (props: Props) => {
-  const { db, schemas } = props;
+  const { db, schemas, classes } = props;
   const { params: rawParams } = useParams();
   const history = useHistory();
+  const tableRef: React.RefObject<any> = React.createRef();
+  const [renderVersion, setRenderVersion] = useState(db.version);
   log.debug('Database version:', db.version);
+  log.debug('Render version:', renderVersion);
   let params: any = {};
   if (rawParams !== undefined) {
     log.info('We got params:', rawParams);
@@ -117,11 +121,27 @@ const FileTable = (props: Props) => {
     });
   }
   log.info('Columns:', params.columns);
+  useEffect(() => {
+    if (db.version !== renderVersion) {
+      log.debug('Updating table');
+      if (tableRef.current) {
+        log.debug('calling onQueryChange');
+        tableRef.current.onQueryChange();
+        log.debug('onQueryChange called');
+      } else {
+        log.debug('No tableRef:', tableRef.current);
+      }
+      log.debug('Setting render version');
+      setRenderVersion(db.version);
+      log.debug('Set render version');
+    }
+  });
 
   // const { notifications, markAllAsSeen } = props;
   return (
-    <div style={{ maxWidth: '100%' }}>
+    <div className={classes.root}>
       <MaterialTable
+        tableRef={tableRef}
         icons={tableIcons}
         columns={params.columns}
         data={query => {
@@ -142,18 +162,18 @@ const FileTable = (props: Props) => {
         options={{ filtering: true }}
         actions={[
           (rowData: any): Action<any> => {
-            const schema = schemas.byId[rowData.schema];
+            const schema = schemas.byId[rowData.schemaId];
             return {
               icon: Edit,
               tooltip: 'Edit Record',
               onClick: (event, eventRowData) => {
                 const linkParams = {
-                  schema: eventRowData.schema,
+                  schemaId: eventRowData.schemaId,
                   path: eventRowData.path,
                   uiSchema: undefined
                 };
                 if (params.uiSchemas) {
-                  linkParams.uiSchema = params.uiSchemas[eventRowData.schema];
+                  linkParams.uiSchema = params.uiSchemas[eventRowData.schemaId];
                 }
                 history.push(
                   `/EditRecord/${encodeURIComponent(

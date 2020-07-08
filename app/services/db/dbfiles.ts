@@ -1,18 +1,18 @@
 import pathlib from 'path';
 import elog from 'electron-log';
 
-import { setAssociation } from './init';
+import { setAssociation } from './model';
 import { database } from '.';
 import { ObjectSchema, defaultSchema } from '../../types/schema';
 import { FILE_MODEL_ID, DIR_MODEL_ID } from '../../constants/database';
 import { getGitStatus } from '../git';
 import {
-  loadYamlFile,
   extractAssociationsFromData,
   canonicalPath,
   canonicalDirname,
   fullCanonicalPath
 } from '../files';
+import { loadYamlFile } from '../yaml';
 
 const log = elog.scope('services/db/files');
 
@@ -40,14 +40,18 @@ export const loadObjectFileToDatabase = async (
         `Database not properly initialized, model ${schema.name} missing`
       );
     }
-    const instance = await model.create(contentObj);
+    log.debug('Upserting...');
+    const [instance] = await model.upsert(contentObj);
+    log.debug('Upsert done');
     for (const key of Object.keys(associations)) {
       const association = associations[key];
       associationPromises.push(
         setAssociation(schema, instance, key, association)
       );
     }
+    log.debug('Setting associations');
     await Promise.all(associationPromises);
+    log.debug('Associations set');
     const [dump] = await database.query('SELECT * FROM Risks');
     log.info('Database Risk table contents:', dump);
 
@@ -64,12 +68,12 @@ export const loadObjectFileToDatabase = async (
       modified: contentObj.modified,
       uncommittedChanges: gitStatus.uncommittedChanges,
       content: contentObj,
-      schema: schema.$id,
+      schemaId: schema.$id,
       // Set association manually since we dont't have reference to parent object here
       dirId: canonicalDirname(path)
     };
     log.debug('Writing fileData to database:', fileData);
-    await FileModel.create(fileData);
+    await FileModel.upsert(fileData);
     log.debug('Write successful');
   } catch (error) {
     throw new Error(`Problem loading ${path}: ${error.toString()}`);
@@ -92,12 +96,34 @@ export const loadOtherFileToDatabase = async (
     created: new Date(gitStatus.created),
     modified: new Date(gitStatus.modified),
     uncommittedChanges: gitStatus.uncommittedChanges,
-    schema: defaultSchema.$id,
+    schemaId: defaultSchema.$id,
     dirId: canonicalDirname(path)
   };
   log.debug('Writing fileData to database:', fileData);
-  await FileModel.create(fileData);
+  await FileModel.upsert(fileData);
   log.debug('Write successful');
+};
+
+export const removeFileFromDatabase = async (path: string): Promise<void> => {
+  const FileModel = database.models[FILE_MODEL_ID];
+  log.debug('Looking for file with path:', canonicalPath(path));
+  const file: any = await FileModel.findByPk(canonicalPath(path));
+  log.debug('Removing file from database:', path);
+  log.debug('Found file database object:', file);
+  if (file) {
+    const model = database.models[file.schemaId];
+    log.debug('Found model object:', model);
+    if (model && file.id) {
+      log.debug('Destroying ID:', file.id);
+      await model.destroy({
+        where: {
+          id: file.id
+        }
+      });
+    }
+    log.debug('Destroying file object itself');
+    await file.destroy();
+  }
 };
 
 export const loadDirectoryToDatabase = async (path: string): Promise<void> => {
@@ -108,6 +134,17 @@ export const loadDirectoryToDatabase = async (path: string): Promise<void> => {
     dirId: canonicalDirname(path)
   };
   log.debug('Writing dirData to database:', dirData);
-  await DirModel.create(dirData);
+  await DirModel.upsert(dirData);
   log.debug('Write successful');
+};
+
+export const removeDirectoryFromDatabase = async (
+  path: string
+): Promise<void> => {
+  const DirModel = database.models[DIR_MODEL_ID];
+  await DirModel.destroy({
+    where: {
+      path: canonicalPath(path)
+    }
+  });
 };

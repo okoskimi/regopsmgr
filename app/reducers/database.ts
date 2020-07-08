@@ -17,8 +17,11 @@ import { initDatabase as doInitDatabase } from '../services/db/init';
 import {
   loadObjectFileToDatabase,
   loadOtherFileToDatabase,
-  loadDirectoryToDatabase
+  loadDirectoryToDatabase,
+  removeFileFromDatabase,
+  removeDirectoryFromDatabase
 } from '../services/db/dbfiles';
+import { wasChanged } from '../services/files';
 
 const log = elog.scope('reducers/database');
 
@@ -136,8 +139,7 @@ export const loadFilesToDatabase = (
         ignored: /(^|[/\\])\../ // ignore dotfiles
       });
 
-      watcher.on('add', async path => {
-        log.info('add', path);
+      const fileEventHandler = async (path: string) => {
         const schema = selectSchema(path, schemas);
         if (schema && isObjectSchema(schema)) {
           log.info('Loading to database:', path, 'with schema:', schema.name);
@@ -168,6 +170,22 @@ export const loadFilesToDatabase = (
             notify.error(`Unable to load /${path}: ${error}`);
           }
         }
+      };
+      // TODO: in future also additions may be happen programmatically
+      // and need to be handled with wasChanged()
+      watcher.on('add', fileEventHandler);
+      watcher.on('change', async path => {
+        if (wasChanged(pathlib.join(rootDir, path))) {
+          log.info('Ignoring due to recent change');
+          return;
+        }
+        await fileEventHandler(path);
+        notify.info(`File ${path} was changed in filesystem`);
+      });
+      watcher.on('unlink', async path => {
+        await removeFileFromDatabase(path);
+        dispatch(updateDatabase());
+        notify.warn(`File ${path} removed from filesystem`);
       });
 
       watcher.on('addDir', async path => {
@@ -184,6 +202,11 @@ export const loadFilesToDatabase = (
           log.info(`Unable to load directory /${path}: ${error}`);
           notify.error(`Unable to load directory /${path}: ${error}`);
         }
+      });
+      watcher.on('unlinkDir', async path => {
+        await removeDirectoryFromDatabase(path);
+        dispatch(updateDatabase());
+        notify.warn(`Directory ${path} removed from filesystem`);
       });
 
       watcher.on('ready', async () => {
