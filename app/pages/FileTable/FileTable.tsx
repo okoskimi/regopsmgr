@@ -120,6 +120,7 @@ const FileTable = (props: Props) => {
       return { ...column, filtering: false };
     });
   }
+  // TODO: Implement lookup configuration in columns based on enumNames
   log.info('Columns:', params.columns);
   useEffect(() => {
     if (db.version !== renderVersion) {

@@ -1,8 +1,13 @@
-import React, { useState, useEffect } from 'react';
+/* eslint-disable react/jsx-props-no-spreading */
+/* eslint-disable react/display-name */
+
+import React, { forwardRef, useState, useEffect } from 'react';
 import { ConnectedProps, connect, useDispatch } from 'react-redux';
 import { useParams, useHistory } from 'react-router-dom';
 import { promises as fsp } from 'fs';
 import pathlib from 'path';
+import MaterialTable, { Icons } from 'material-table';
+import { Model } from 'sequelize/types';
 import elog from 'electron-log';
 
 import Form from '@rjsf/material-ui';
@@ -13,6 +18,21 @@ import {
   WithStyles
 } from '@material-ui/core/styles';
 import Button from '@material-ui/core/Button';
+import AddBox from '@material-ui/icons/AddBox';
+import ArrowUpward from '@material-ui/icons/ArrowUpward';
+import Check from '@material-ui/icons/Check';
+import ChevronLeft from '@material-ui/icons/ChevronLeft';
+import ChevronRight from '@material-ui/icons/ChevronRight';
+import Clear from '@material-ui/icons/Clear';
+import DeleteOutline from '@material-ui/icons/DeleteOutline';
+import Edit from '@material-ui/icons/Edit';
+import FilterList from '@material-ui/icons/FilterList';
+import FirstPage from '@material-ui/icons/FirstPage';
+import LastPage from '@material-ui/icons/LastPage';
+import Remove from '@material-ui/icons/Remove';
+import SaveAlt from '@material-ui/icons/SaveAlt';
+import Search from '@material-ui/icons/Search';
+import ViewColumn from '@material-ui/icons/ViewColumn';
 
 import { RootState } from '../../types/store';
 import {
@@ -20,15 +40,40 @@ import {
   relativePathFromCanonical,
   extractAssociationsFromData,
   AssociationDataMap,
-  extractAssociationsFromSchema,
-  AssociationSchemaMap
+  extractAssociationsFromSchema
 } from '../../services/files';
 import { ObjectSchema, isObjectSchema } from '../../types/schema';
 import { saveYamlFile, loadYamlFile } from '../../services/yaml';
 import { updateDatabase } from '../../reducers/database';
 import { loadObjectFileToDatabase } from '../../services/db/dbfiles';
+import { loadAssociations, loadObject } from '../../services/db/query';
+import { assertIsDefined } from '../../types/util';
 
 const log = elog.scope('pages/EditRecord');
+
+const tableIcons: Icons = {
+  Add: forwardRef((props, ref) => <AddBox {...props} ref={ref} />),
+  Check: forwardRef((props, ref) => <Check {...props} ref={ref} />),
+  Clear: forwardRef((props, ref) => <Clear {...props} ref={ref} />),
+  Delete: forwardRef((props, ref) => <DeleteOutline {...props} ref={ref} />),
+  DetailPanel: forwardRef((props, ref) => (
+    <ChevronRight {...props} ref={ref} />
+  )),
+  Edit: forwardRef((props, ref) => <Edit {...props} ref={ref} />),
+  Export: forwardRef((props, ref) => <SaveAlt {...props} ref={ref} />),
+  Filter: forwardRef((props, ref) => <FilterList {...props} ref={ref} />),
+  FirstPage: forwardRef((props, ref) => <FirstPage {...props} ref={ref} />),
+  LastPage: forwardRef((props, ref) => <LastPage {...props} ref={ref} />),
+  NextPage: forwardRef((props, ref) => <ChevronRight {...props} ref={ref} />),
+  PreviousPage: forwardRef((props, ref) => (
+    <ChevronLeft {...props} ref={ref} />
+  )),
+  ResetSearch: forwardRef((props, ref) => <Clear {...props} ref={ref} />),
+  Search: forwardRef((props, ref) => <Search {...props} ref={ref} />),
+  SortArrow: forwardRef((props, ref) => <ArrowUpward {...props} ref={ref} />),
+  ThirdStateCheck: forwardRef((props, ref) => <Remove {...props} ref={ref} />),
+  ViewColumn: forwardRef((props, ref) => <ViewColumn {...props} ref={ref} />)
+};
 
 const styles = (theme: Theme) =>
   createStyles({
@@ -64,13 +109,15 @@ const EditRecord = (props: Props) => {
   const { params: rawParams } = useParams();
   const history = useHistory();
   const dispatch = useDispatch();
+  const tableRef: React.RefObject<any> = React.createRef();
 
   interface FileData {
+    instance?: Model | null;
     contentObj?: any;
     contentSchema?: ObjectSchema;
     modified?: number;
     associations?: AssociationDataMap;
-    associationSchemas?: AssociationSchemaMap;
+    associationNames?: Array<string>;
   }
 
   const initialData: FileData = {};
@@ -105,14 +152,17 @@ const EditRecord = (props: Props) => {
         );
         const {
           contentSchema,
-          associationSchemas
+          associationNames
         } = extractAssociationsFromSchema(schema);
+        const instance = await loadObject(schema.$id, contentObj.id);
+
         console.log('Setting contentSchema to:', contentSchema);
         setFileData({
+          instance,
           contentObj,
           contentSchema,
           associations,
-          associationSchemas,
+          associationNames,
           modified: stat.mtimeMs
         });
       }
@@ -123,11 +173,28 @@ const EditRecord = (props: Props) => {
   if (!params.title) {
     params.title = 'Files';
   }
+
+  const defaultAssociationColumns = [
+    { title: 'Name', field: 'name' },
+    { title: 'ID', field: 'id' }
+  ];
+
+  if (params.associationColumns) {
+    // Disable filtering for columns that use deep properties that are not visible to SQL
+    params.associationColumns = params.associationColumns.map((column: any) => {
+      if (column.field.indexOf('.') < 0) {
+        return column;
+      }
+      return { ...column, filtering: false };
+    });
+  }
+
   if (
     !fileData.contentObj ||
     !fileData.contentSchema ||
     !fileData.associations ||
-    !fileData.associationSchemas
+    !fileData.associationNames ||
+    !fileData.instance
   ) {
     return (
       <div>
@@ -164,9 +231,11 @@ const EditRecord = (props: Props) => {
   };
 
   console.log('UI Schema:', uiSchema);
+  console.log('Association names:', fileData.associationNames);
 
   return (
     <div className={classes.root}>
+      <h2>Data</h2>
       <Form
         schema={fileData.contentSchema as any}
         formData={fileData.contentObj}
@@ -190,6 +259,53 @@ const EditRecord = (props: Props) => {
           </Button>
         </div>
       </Form>
+      <h2>Associations</h2>
+      {fileData.associationNames.map(associationName => {
+        console.log('Rendering association:', associationName);
+        let columns = defaultAssociationColumns;
+        if (
+          params.associationColumns &&
+          params.associationColumns[associationName]
+        ) {
+          columns = params.associationColumns[associationName];
+        }
+        return (
+          <div key={associationName}>
+            <h3>{associationName}</h3>
+            <MaterialTable
+              tableRef={tableRef}
+              icons={tableIcons}
+              columns={columns}
+              data={query => {
+                log.info('MaterialTable data request:', query);
+                assertIsDefined(fileData.contentSchema);
+                assertIsDefined(fileData.instance);
+                return loadAssociations(
+                  fileData.contentSchema.$id,
+                  fileData.instance,
+                  associationName,
+                  query.page,
+                  query.pageSize,
+                  query.search,
+                  columns,
+                  query.orderBy,
+                  query.orderDirection,
+                  query.filters,
+                  params.filter
+                );
+              }}
+              title={params.title}
+            />
+            <div className={classes.buttons}>
+              <Button variant="contained" color="primary">
+                Add new
+                {associationName}
+                association
+              </Button>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 };

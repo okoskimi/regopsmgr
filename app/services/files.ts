@@ -93,35 +93,26 @@ export const extractAssociationsFromData = (
   };
 };
 
-export interface AssociationSchema {
-  type: string;
-  readOnly?: boolean;
-}
-
-export interface AssociationSchemaMap {
-  [x: string]: AssociationSchema;
-}
-
 export interface SchemaExtractResult {
   contentSchema: ObjectSchema;
-  associationSchemas: AssociationSchemaMap;
+  associationNames: Array<string>;
 }
 
 export const extractAssociationsFromSchema = (
   schema: ObjectSchema
 ): SchemaExtractResult => {
   const contentSchema = { ...schema };
-  const associationSchemas: AssociationSchemaMap = {};
+  const associationNames: Array<string> = [];
   Object.keys(contentSchema.properties).forEach(key => {
     const { type } = contentSchema.properties[key];
     if (type === 'association') {
-      associationSchemas[key] = contentSchema.properties[key];
+      associationNames.push(key);
       delete contentSchema.properties[key];
     }
   });
   return {
     contentSchema,
-    associationSchemas
+    associationNames
   };
 };
 
