@@ -57,8 +57,13 @@ export const relativePathFromCanonical = (path: string): string => {
   return path.startsWith('/') ? path.substring(1) : path;
 };
 
+export interface AssociationData {
+  modelId: string;
+  instances: Array<string>;
+}
+
 export interface AssociationDataMap {
-  [x: string]: string | Array<string>;
+  [x: string]: AssociationData;
 }
 
 export interface DataExtractResult {
@@ -76,7 +81,19 @@ export const extractAssociationsFromData = (
     if (schema.properties[key]) {
       const { type } = schema.properties[key];
       if (type === 'association') {
-        associations[key] = contentObj[key];
+        const { target } = schema.properties[key];
+        if (typeof target === 'string') {
+          associations[key] = {
+            modelId: target,
+            instances: Array.isArray(contentObj[key])
+              ? contentObj[key]
+              : [contentObj[key]]
+          };
+        } else {
+          throw new Error(
+            `Target model for association ${key} in model ${schema.$id} is not a string`
+          );
+        }
         delete contentObj[key];
       } else if (removeNested && (type === 'array' || type === 'object')) {
         delete contentObj[key];

@@ -7,7 +7,6 @@ import { useParams, useHistory } from 'react-router-dom';
 import { promises as fsp } from 'fs';
 import pathlib from 'path';
 import MaterialTable, { Icons } from 'material-table';
-import { Model } from 'sequelize/types';
 import elog from 'electron-log';
 
 import Form from '@rjsf/material-ui';
@@ -46,7 +45,7 @@ import { ObjectSchema, isObjectSchema } from '../../types/schema';
 import { saveYamlFile, loadYamlFile } from '../../services/yaml';
 import { updateDatabase } from '../../reducers/database';
 import { loadObjectFileToDatabase } from '../../services/db/dbfiles';
-import { loadAssociations, loadObject } from '../../services/db/query';
+import { loadData } from '../../services/db/query';
 import { assertIsDefined } from '../../types/util';
 
 const log = elog.scope('pages/EditRecord');
@@ -109,10 +108,8 @@ const EditRecord = (props: Props) => {
   const { params: rawParams } = useParams();
   const history = useHistory();
   const dispatch = useDispatch();
-  const tableRef: React.RefObject<any> = React.createRef();
 
   interface FileData {
-    instance?: Model | null;
     contentObj?: any;
     contentSchema?: ObjectSchema;
     modified?: number;
@@ -154,11 +151,9 @@ const EditRecord = (props: Props) => {
           contentSchema,
           associationNames
         } = extractAssociationsFromSchema(schema);
-        const instance = await loadObject(schema.$id, contentObj.id);
 
         console.log('Setting contentSchema to:', contentSchema);
         setFileData({
-          instance,
           contentObj,
           contentSchema,
           associations,
@@ -193,8 +188,7 @@ const EditRecord = (props: Props) => {
     !fileData.contentObj ||
     !fileData.contentSchema ||
     !fileData.associations ||
-    !fileData.associationNames ||
-    !fileData.instance
+    !fileData.associationNames
   ) {
     return (
       <div>
@@ -261,7 +255,9 @@ const EditRecord = (props: Props) => {
       </Form>
       <h2>Associations</h2>
       {fileData.associationNames.map(associationName => {
+        assertIsDefined(fileData.associations);
         console.log('Rendering association:', associationName);
+        console.log('Data:', fileData.associations[associationName]);
         let columns = defaultAssociationColumns;
         if (
           params.associationColumns &&
@@ -269,17 +265,34 @@ const EditRecord = (props: Props) => {
         ) {
           columns = params.associationColumns[associationName];
         }
+        if (!fileData.associations[associationName]) {
+          return (
+            <div key={associationName}>
+              <p>{`No ${associationName} associations.`}</p>
+            </div>
+          );
+        }
         return (
           <div key={associationName}>
-            <h3>{associationName}</h3>
             <MaterialTable
-              tableRef={tableRef}
               icons={tableIcons}
               columns={columns}
               data={query => {
                 log.info('MaterialTable data request:', query);
                 assertIsDefined(fileData.contentSchema);
-                assertIsDefined(fileData.instance);
+                assertIsDefined(fileData.associations);
+                return loadData(
+                  fileData.associations[associationName].modelId,
+                  query.page,
+                  query.pageSize,
+                  query.search,
+                  columns,
+                  query.orderBy,
+                  query.orderDirection,
+                  query.filters,
+                  { id: fileData.associations[associationName].instances }
+                );
+                /*
                 return loadAssociations(
                   fileData.contentSchema.$id,
                   fileData.instance,
@@ -293,8 +306,14 @@ const EditRecord = (props: Props) => {
                   query.filters,
                   params.filter
                 );
+                */
               }}
-              title={params.title}
+              title={associationName}
+              options={{
+                padding: 'dense',
+                paging:
+                  fileData.associations[associationName].instances.length > 5
+              }}
             />
             <div className={classes.buttons}>
               <Button variant="contained" color="primary">

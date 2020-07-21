@@ -9,30 +9,25 @@ const log = elog.scope('services/db/model');
 // Generic association interface that provides:
 //  - Generic API applicable to both single and multi associations
 //  - Association arity specific APIs that throw an exception if association type is not correct
+
 class AssociationWrapper {
   association: any;
 
-  isMulti: boolean;
-
   constructor(a: Association) {
-    this.association = a;
-    if (
-      a.associationType === 'BelongsToMany' ||
-      a.associationType === 'HasMany'
-    ) {
-      this.isMulti = true;
-    } else if (
-      a.associationType === 'BelongsTo' ||
-      a.associationType === 'HasOne'
-    ) {
-      this.isMulti = false;
-    } else {
-      throw new Error(`Illegal association type ${a.associationType}`);
+    switch (a.associationType) {
+      case 'HasOne':
+      case 'HasMany':
+      case 'BelongsTo':
+      case 'BelongsToMany':
+        this.association = a;
+        break;
+      default:
+        throw new Error(`Illegal association type ${a.associationType}`);
     }
   }
 
   async get(instance: Model, options: any = {}): Promise<Array<Model>> {
-    if (this.isMulti) {
+    if (this.association.isMultiAssociation) {
       return this.association.get(instance, options);
     }
     const result: Model | null = this.association.get(instance, options);
@@ -43,14 +38,14 @@ class AssociationWrapper {
   }
 
   async getOne(instance: Model, options: any = {}): Promise<Model | null> {
-    if (this.isMulti) {
+    if (this.association.isMultiAssociation) {
       throw new Error('Called getOne for multi-association');
     }
     return this.association.get(instance, options);
   }
 
   async getAll(instance: Model, options: any = {}): Promise<Array<Model>> {
-    if (!this.isMulti) {
+    if (!this.association.isMultiAssociation) {
       throw new Error('Called getAll for single-association');
     }
     return this.association.get(instance, options);
@@ -70,7 +65,7 @@ class AssociationWrapper {
     options: any = {}
   ): Promise<void> {
     if (
-      !this.isMulti &&
+      !this.association.isMultiAssociation &&
       Array.isArray(associatedObjects) &&
       associatedObjects.length > 1
     ) {
@@ -78,16 +73,51 @@ class AssociationWrapper {
         'Attempted to set single association to multiple objects'
       );
     }
-    if (!this.isMulti && Array.isArray(associatedObjects)) {
+    console.log('Setting association:', this.association);
+    log.debug(
+      `Setting ${
+        this.association.isMultiAssociation ? 'multi' : 'single'
+      } association with parameter `,
+      associatedObjects,
+      ` (${typeof associatedObjects})`
+    );
+    if (
+      !this.association.isMultiAssociation &&
+      Array.isArray(associatedObjects)
+    ) {
       if (associatedObjects.length === 0) {
+        log.debug(
+          `${this.association.associationType}.${
+            this.association.accessors.set
+          }(${instance.get('id')}, null) with options:`,
+          options
+        );
         return this.association.set(instance, null, options);
       }
       // Length must be one
+      log.debug(
+        `${this.association.associationType}.${
+          this.association.accessors.set
+        }(${instance.get('id')}, ${associatedObjects[0]}) with options:`,
+        options
+      );
       return this.association.set(instance, associatedObjects[0], options);
     }
-    if (this.isMulti && associatedObjects === null) {
+    if (this.association.isMultiAssociation && associatedObjects === null) {
+      log.debug(
+        `${this.association.associationType}.${
+          this.association.accessors.set
+        }(${instance.get('id')}, []) with options:`,
+        options
+      );
       return this.association.set(instance, [], options);
     }
+    log.debug(
+      `${this.association.associationType}.${
+        this.association.accessors.set
+      }(${instance.get('id')}, ${associatedObjects}) with options:`,
+      options
+    );
     return this.association.set(instance, associatedObjects, options);
   }
 
@@ -96,7 +126,7 @@ class AssociationWrapper {
     associatedObject: Model | string | number | null,
     options: any = {}
   ): Promise<void> {
-    if (this.isMulti) {
+    if (this.association.isMultiAssociation) {
       throw new Error('Called setOne for multi-association');
     }
     return this.association.set(instance, associatedObject, options);
@@ -107,24 +137,24 @@ class AssociationWrapper {
     associatedObjects: Model[] | string[] | number[],
     options: any = {}
   ): Promise<void> {
-    if (!this.isMulti) {
+    if (!this.association.isMultiAssociation) {
       throw new Error('Called setAll for single-association');
     }
     return this.association.set(instance, associatedObjects, options);
   }
 
   async count(instance: Model, options: any = {}): Promise<number> {
-    if (!this.isMulti) {
-      return 1;
+    if (this.association.isMultiAssociation) {
+      return this.association.count(instance, options);
     }
-    return this.association.count(instance, options);
+    return 1;
   }
 
   async countAll(instance: Model, options: any = {}): Promise<number> {
-    if (!this.isMulti) {
-      throw new Error('Called countAll for single-association');
+    if (this.association.isMultiAssociation) {
+      return this.association.count(instance, options);
     }
-    return this.association.count(instance, options);
+    throw new Error('Called countAll for single-association');
   }
 }
 
@@ -172,9 +202,6 @@ export const setAssociation = async (
       `Internal error: association ${property} missing for model for schema ${sourceSchema.name}`
     );
   }
-  log.info(
-    `Setting association ${property} for model ${sourceSchema.$id}: ${target}`
-  );
   await association.set(sourceInstance, target);
 };
 

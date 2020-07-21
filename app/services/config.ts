@@ -265,7 +265,7 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
                     type: 'string',
                     // UUIDv4 regex
                     pattern:
-                      '/^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i'
+                      '^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-4[0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$'
                   };
                   break;
                 // These relationships affect sequelize configuration but have no YAML serialization
@@ -280,7 +280,7 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
                       type: 'string',
                       // UUIDv4 regex
                       pattern:
-                        '/^[0-9A-F]{8}-[0-9A-F]{4}-4[0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i'
+                        '^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-4[0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}$'
                     }
                   };
                   break;

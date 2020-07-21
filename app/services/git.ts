@@ -30,7 +30,7 @@ export const getGitStatus = async (
   path: string,
   gitDir: string
 ): Promise<GitStatus> => {
-  log.info(`Looking for timestamps of ${path} at ${gitDir}`);
+  log.debug(`Looking for timestamps of ${path} at ${gitDir}`);
   const commits = await git.log({ fs, dir: gitDir });
   let lastSHA = null;
   let lastCommit = null;
@@ -50,7 +50,7 @@ export const getGitStatus = async (
         oid: commit.oid,
         filepath: path
       });
-      log.info(
+      log.silly(
         `Found file in git commit at ${new Date(
           commit.commit.committer.timestamp * 1000
         )}`
@@ -78,7 +78,7 @@ export const getGitStatus = async (
   }
   // File is not in git
   if (statusResult.modified < 0) {
-    log.info('No commits found');
+    log.debug('No commits found');
     const stat = await fsp.stat(pathlib.join(gitDir, path));
     return {
       modified: stat.mtimeMs,
@@ -90,7 +90,7 @@ export const getGitStatus = async (
   const status = await git.status({ fs, dir: gitDir, filepath: path });
   // File has not been modified since checkout
   if (status !== 'unmodified') {
-    log.info('File has been modified since checkout');
+    log.debug('File has been modified since checkout');
     statusResult.uncommittedChanges = true;
     const stat = await fsp.stat(pathlib.join(gitDir, path));
     statusResult.modified = stat.mtimeMs;

@@ -184,7 +184,6 @@ export const initDatabase = async (configs: ConfigFileState) => {
       );
     }
     const targetModel = database.models[schemas[a.target].$id];
-    log.info('Target model', targetModel);
     if (!targetModel) {
       throw new Error(
         `Target model with schema $id ${
@@ -192,6 +191,7 @@ export const initDatabase = async (configs: ConfigFileState) => {
         } for relationship ${a.name} in ${a.filepath} does not exist`
       );
     }
+    log.info('Target model', targetModel.name);
     // Schema properties for association that are not known properties (which are removed below)
     // are used as options for creating the association
     const options = { ...a }; // Shallow copy
@@ -203,12 +203,24 @@ export const initDatabase = async (configs: ConfigFileState) => {
     delete options.relationship;
     delete options.type;
     delete options.filter;
+    // Temp:
+    if (options.as) {
+      delete options.as;
+    }
+    // Prevent constraint errors when target instances do not exist yet.
+    options.constraints = false;
+    /*
     options.foreignKey = {
       name: a.name,
       type: DataTypes.UUIDV4
     };
+    */
     switch (a.relationship) {
       case 'HasOne':
+        log.debug(
+          `Adding HasOne association ${a.source} --${a.name}--> ${targetModel.name} with options:`,
+          options
+        );
         addAssociation(
           a.source,
           a.name,
@@ -216,13 +228,24 @@ export const initDatabase = async (configs: ConfigFileState) => {
         );
         break;
       case 'HasMany':
+        /*
+        log.debug(
+          `Adding HasMany association ${a.source} --${a.name}--> ${targetModel.name} with options:`,
+          options
+        );
         addAssociation(
           a.source,
           a.name,
           database.models[a.source].hasMany(targetModel, options)
         );
+        */
         break;
       case 'BelongsTo':
+        // options.foreignKey = a.name;
+        log.debug(
+          `Adding BelongsTo association ${a.source} --${a.name}--> ${targetModel.name} with options:`,
+          options
+        );
         addAssociation(
           a.source,
           a.name,
@@ -230,6 +253,11 @@ export const initDatabase = async (configs: ConfigFileState) => {
         );
         break;
       case 'BelongsToMany':
+        // options.foreignKey = a.name;
+        log.debug(
+          `Adding BelongsToMany association ${a.source} --${a.name}--> ${targetModel.name} with options:`,
+          options
+        );
         addAssociation(
           a.source,
           a.name,

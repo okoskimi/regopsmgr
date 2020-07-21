@@ -40,20 +40,33 @@ export const loadObjectFileToDatabase = async (
         `Database not properly initialized, model ${schema.name} missing`
       );
     }
-    log.debug('Upserting...');
-    const [instance] = await model.upsert(contentObj);
-    log.debug('Upsert done');
+    log.debug('Upserting content:', contentObj);
+    // FIXME: Have to use find-save because upsert does not work properly for sqlite
+    // returns null if not found
+    let instance = await model.findByPk(contentObj.id);
+    if (instance === null) {
+      instance = await model.create(contentObj);
+    } else {
+      instance.set(contentObj);
+      instance.save();
+    }
+    log.debug('Upsert done:', instance);
     for (const key of Object.keys(associations)) {
       const association = associations[key];
+      log.debug(
+        `Setting association ${key} for ${schema.$id}:${instance.get(
+          'id'
+        )} to ${association.instances} (is new: ${instance.isNewRecord})`
+      );
       associationPromises.push(
-        setAssociation(schema, instance, key, association)
+        setAssociation(schema, instance, key, association.instances)
       );
     }
     log.debug('Setting associations');
     await Promise.all(associationPromises);
     log.debug('Associations set');
-    const [dump] = await database.query('SELECT * FROM Risks');
-    log.info('Database Risk table contents:', dump);
+    // const [dump] = await database.query('SELECT * FROM Risks');
+    // log.info('Database Risk table contents:', dump);
 
     const FileModel = database.models[FILE_MODEL_ID];
     const fileData = {

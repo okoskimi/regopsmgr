@@ -110,11 +110,11 @@ function App(props: Props) {
   }, []);
 
   useEffect(() => {
-    log.info('Calling initSchemas for', configFiles);
+    // log.info('Calling initSchemas for', configFiles);
     initSchemas(configFiles, notify);
-    log.info('Calling initAppMenu for', configFiles);
+    // log.info('Calling initAppMenu for', configFiles);
     initAppMenu(configFiles, notify);
-    log.info('Calling initDatabase for', configFiles);
+    // log.info('Calling initDatabase for', configFiles);
     initDatabase(configFiles, notify);
 
   }, [configFiles]);
