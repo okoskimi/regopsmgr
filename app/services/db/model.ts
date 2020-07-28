@@ -26,6 +26,22 @@ class AssociationWrapper {
     }
   }
 
+  associationType(): boolean {
+    return this.association.associationType;
+  }
+
+  isSelfAssociation(): boolean {
+    return this.association.isSelfAssociation;
+  }
+
+  isSingleAssociation(): boolean {
+    return this.association.isSingleAssociation;
+  }
+
+  isMultiAssociation(): boolean {
+    return this.association.isMultiAssociation;
+  }
+
   async get(instance: Model, options: any = {}): Promise<Array<Model>> {
     if (this.association.isMultiAssociation) {
       return this.association.get(instance, options);

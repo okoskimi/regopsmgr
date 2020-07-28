@@ -110,27 +110,38 @@ export const extractAssociationsFromData = (
   };
 };
 
+export interface AssociationDefinition {
+  target: string;
+  relationship: string;
+}
+
 export interface SchemaExtractResult {
   contentSchema: ObjectSchema;
   associationNames: Array<string>;
+  associationByName: {
+    [name: string]: AssociationDefinition;
+  };
 }
 
 export const extractAssociationsFromSchema = (
   schema: ObjectSchema
 ): SchemaExtractResult => {
-  const contentSchema = { ...schema };
-  const associationNames: Array<string> = [];
-  Object.keys(contentSchema.properties).forEach(key => {
-    const { type } = contentSchema.properties[key];
-    if (type === 'association') {
-      associationNames.push(key);
-      delete contentSchema.properties[key];
+  const result: SchemaExtractResult = {
+    contentSchema: { ...schema },
+    associationNames: [],
+    associationByName: {}
+  };
+  Object.keys(result.contentSchema.properties).forEach(key => {
+    const { type, target } = result.contentSchema.properties[key];
+    if (type === 'association' && typeof target === 'string') {
+      result.associationNames.push(key);
+      result.associationByName[key] = (result.contentSchema.properties[
+        key
+      ] as unknown) as AssociationDefinition;
+      delete result.contentSchema.properties[key];
     }
   });
-  return {
-    contentSchema,
-    associationNames
-  };
+  return result;
 };
 
 export default {};

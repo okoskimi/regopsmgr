@@ -24,6 +24,7 @@ import ChevronLeft from '@material-ui/icons/ChevronLeft';
 import ChevronRight from '@material-ui/icons/ChevronRight';
 import Clear from '@material-ui/icons/Clear';
 import DeleteOutline from '@material-ui/icons/DeleteOutline';
+import Delete from '@material-ui/icons/Delete';
 import Edit from '@material-ui/icons/Edit';
 import FilterList from '@material-ui/icons/FilterList';
 import FirstPage from '@material-ui/icons/FirstPage';
@@ -39,7 +40,8 @@ import {
   relativePathFromCanonical,
   extractAssociationsFromData,
   AssociationDataMap,
-  extractAssociationsFromSchema
+  extractAssociationsFromSchema,
+  AssociationDefinition
 } from '../../services/files';
 import { ObjectSchema, isObjectSchema } from '../../types/schema';
 import { saveYamlFile, loadYamlFile } from '../../services/yaml';
@@ -47,6 +49,7 @@ import { updateDatabase } from '../../reducers/database';
 import { loadObjectFileToDatabase } from '../../services/db/dbfiles';
 import { loadData } from '../../services/db/query';
 import { assertIsDefined } from '../../types/util';
+import AddAssociationModal from '../../components/AddAssociationModal';
 
 const log = elog.scope('pages/EditRecord');
 
@@ -89,17 +92,20 @@ const styles = (theme: Theme) =>
     }
   });
 
+type OwnProps = WithStyles<typeof styles>;
+/*
 interface OwnProps extends WithStyles<typeof styles> {
-  onDrawerToggle: () => void;
+  ...
 }
+*/
+
 const mapState = (state: RootState) => ({
   db: state.database,
   schemas: state.schemas
 });
 
-const mapDispatch = {
-  markAllAsSeen: null
-};
+const mapDispatch = {};
+
 const connector = connect(mapState, mapDispatch);
 type Props = ConnectedProps<typeof connector> & OwnProps;
 
@@ -115,11 +121,20 @@ const EditRecord = (props: Props) => {
     modified?: number;
     associations?: AssociationDataMap;
     associationNames?: Array<string>;
+    associationByName?: {
+      [name: string]: AssociationDefinition;
+    };
+  }
+
+  interface ModalMap {
+    [name: string]: boolean;
   }
 
   const initialData: FileData = {};
+  const modalsInitialState: ModalMap = {};
 
   const [fileData, setFileData] = useState(initialData);
+  const [modals, setModals] = useState(modalsInitialState);
 
   log.debug('Database version:', db.version, schemas, history);
   let params: any = {};
@@ -149,7 +164,8 @@ const EditRecord = (props: Props) => {
         );
         const {
           contentSchema,
-          associationNames
+          associationNames,
+          associationByName
         } = extractAssociationsFromSchema(schema);
 
         console.log('Setting contentSchema to:', contentSchema);
@@ -158,6 +174,7 @@ const EditRecord = (props: Props) => {
           contentSchema,
           associations,
           associationNames,
+          associationByName,
           modified: stat.mtimeMs
         });
       }
@@ -229,7 +246,7 @@ const EditRecord = (props: Props) => {
 
   return (
     <div className={classes.root}>
-      <h2>Data</h2>
+      <h2>{`Edit ${schema.name}`}</h2>
       <Form
         schema={fileData.contentSchema as any}
         formData={fileData.contentObj}
@@ -253,7 +270,8 @@ const EditRecord = (props: Props) => {
           </Button>
         </div>
       </Form>
-      <h2>Associations</h2>
+      <hr />
+      <h3>Associations</h3>
       {fileData.associationNames.map(associationName => {
         assertIsDefined(fileData.associations);
         console.log('Rendering association:', associationName);
@@ -265,6 +283,7 @@ const EditRecord = (props: Props) => {
         ) {
           columns = params.associationColumns[associationName];
         }
+        /*
         if (!fileData.associations[associationName]) {
           return (
             <div key={associationName}>
@@ -272,56 +291,107 @@ const EditRecord = (props: Props) => {
             </div>
           );
         }
+        */
+        assertIsDefined(fileData.associationByName);
+        const hasAssociations = !!fileData.associations[associationName];
+        const isLong = hasAssociations
+          ? fileData.associations[associationName].instances.length > 5
+          : false;
+        const relation =
+          fileData.associationByName[associationName].relationship;
+        const useAddIcon =
+          ['HasMany', 'BelongsToMany'].includes(relation) || !hasAssociations;
         return (
           <div key={associationName}>
-            <MaterialTable
-              icons={tableIcons}
+            {hasAssociations ? (
+              <MaterialTable
+                icons={tableIcons}
+                columns={columns}
+                data={query => {
+                  log.info('MaterialTable data request:', query);
+                  assertIsDefined(fileData.contentSchema);
+                  assertIsDefined(fileData.associations);
+                  return loadData(
+                    fileData.associations[associationName].modelId,
+                    query.page,
+                    query.pageSize,
+                    query.search,
+                    columns,
+                    query.orderBy,
+                    query.orderDirection,
+                    query.filters,
+                    { id: fileData.associations[associationName].instances }
+                  );
+                }}
+                title={associationName}
+                options={{
+                  padding: 'dense',
+                  search: isLong,
+                  paging: isLong
+                }}
+                actions={[
+                  {
+                    icon: () => (useAddIcon ? <AddBox /> : <Edit />),
+                    tooltip: useAddIcon
+                      ? 'Add Association'
+                      : 'Change Association',
+                    isFreeAction: true,
+                    onClick: () =>
+                      setModals({ ...modals, [associationName]: true })
+                  },
+                  {
+                    icon: () => <Delete />,
+                    tooltip: 'Remove Association',
+                    onClick: (event, rowData: any) =>
+                      alert(`You removed ${rowData.id}`)
+                  }
+                ]}
+              />
+            ) : (
+              <MaterialTable
+                icons={tableIcons}
+                columns={[{ title: 'Data', field: 'data' }]}
+                data={[{ data: 'No Data' }]}
+                title={associationName}
+                options={{
+                  padding: 'default',
+                  search: false,
+                  header: false,
+                  paging: false
+                }}
+                actions={[
+                  {
+                    icon: () => (useAddIcon ? <AddBox /> : <Edit />),
+                    tooltip: useAddIcon
+                      ? 'Add Association'
+                      : 'Change Association',
+                    isFreeAction: true,
+                    onClick: () =>
+                      setModals({ ...modals, [associationName]: true })
+                  }
+                ]}
+              />
+            )}
+            <AddAssociationModal
+              open={!!modals[associationName]}
+              onCancel={() => {
+                setModals({ ...modals, [associationName]: false });
+              }}
+              onAdd={(association: string) => {
+                alert(`Add association ${association}`);
+              }}
               columns={columns}
-              data={query => {
-                log.info('MaterialTable data request:', query);
-                assertIsDefined(fileData.contentSchema);
-                assertIsDefined(fileData.associations);
-                return loadData(
-                  fileData.associations[associationName].modelId,
-                  query.page,
-                  query.pageSize,
-                  query.search,
-                  columns,
-                  query.orderBy,
-                  query.orderDirection,
-                  query.filters,
-                  { id: fileData.associations[associationName].instances }
-                );
-                /*
-                return loadAssociations(
-                  fileData.contentSchema.$id,
-                  fileData.instance,
-                  associationName,
-                  query.page,
-                  query.pageSize,
-                  query.search,
-                  columns,
-                  query.orderBy,
-                  query.orderDirection,
-                  query.filters,
-                  params.filter
-                );
-                */
-              }}
-              title={associationName}
-              options={{
-                padding: 'dense',
-                paging:
-                  fileData.associations[associationName].instances.length > 5
-              }}
+              schema={
+                schemas.byId[fileData.associationByName[associationName].target]
+              }
+              associationName={associationName}
+              associations={
+                hasAssociations
+                  ? fileData.associations[associationName].instances
+                  : []
+              }
             />
-            <div className={classes.buttons}>
-              <Button variant="contained" color="primary">
-                Add new
-                {associationName}
-                association
-              </Button>
-            </div>
+            <br />
           </div>
         );
       })}
