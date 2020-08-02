@@ -1,8 +1,9 @@
 import git, { Walker } from 'isomorphic-git';
+import { ValidateFunction } from 'ajv';
 import fs from 'fs';
+import { app } from 'electron';
 import path from 'path';
 import YAML from 'yaml';
-import Ajv from 'ajv';
 import { v4 as uuidv4 } from 'uuid';
 import produce from 'immer';
 import elog from 'electron-log';
@@ -13,20 +14,24 @@ import { getSchema, isObjectSchemaConfig } from '../types/schema';
 import {
   ConfigFile,
   isSchemaConfigFile,
-  isMainConfigFIle
+  isMainConfigFile,
+  GlobalConfigFile,
+  GlobalConfig
 } from '../types/config';
+import { loadYamlFile, saveYamlFile } from './yaml';
+import { compileSchema, resetSchemas, addSchema } from '../types/validation';
 
 const log = elog.scope('services/config');
 
-// This will be reset in loadSchemas but setting it to null here
-// would make null a possible value and force code to null check everywhere
-let ajv = new Ajv(); // options can be passed, e.g. {allErrors: true}
+const GLOBAL_CONFIG_FILE_NAME = 'RegOpsMgrConfig.yml';
 
 /*
  * Returns config file contents from <em>master</em> branch.
  */
 
-export const getConfigFiles = async (dir: string): Promise<ConfigFileState> => {
+export const getConfigFilesFromGit = async (
+  dir: string
+): Promise<ConfigFileState> => {
   /*
   git.log({fs, dir})
       .then((commits: any) => {
@@ -126,11 +131,11 @@ export const getConfigFiles = async (dir: string): Promise<ConfigFileState> => {
       }
       return result;
     },
-    { byPath: {}, data: [] }
+    { byPath: {}, data: [], global: null }
   );
 };
 
-const commonMetaSchema = ajv.compile({
+const commonMetaSchema = compileSchema({
   type: 'object',
   properties: {
     name: { type: 'string', minLength: 2 },
@@ -142,7 +147,7 @@ const commonMetaSchema = ajv.compile({
 });
 
 // TODO: Make type-specific schemas
-const metaSchemas: { [type: string]: Ajv.ValidateFunction } = {
+const metaSchemas: { [type: string]: ValidateFunction } = {
   document: commonMetaSchema,
   source: commonMetaSchema,
   object: commonMetaSchema,
@@ -177,7 +182,7 @@ const hasAssociations = (obj: any): boolean => {
 
 export const loadSchemas = (configs: ConfigFileState): SchemaState => {
   // Reset schema instance, because added schemas cannot be updated
-  ajv = new Ajv();
+  resetSchemas();
   const schemas: SchemaState = {
     byId: {},
     data: []
@@ -301,7 +306,7 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
           });
         });
         log.info('Adding schema', jsonSchema);
-        ajv.addSchema(jsonSchema); // Throws exception if format is wrong
+        addSchema(jsonSchema); // Throws exception if format is wrong
       }
       // At this point the schema is known to be OK, we can store it
       const schema = getSchema(schemaConfig); // Creates RegExp object
@@ -341,9 +346,9 @@ const menuSchema = {
 };
 
 export const loadAppMenu = (configs: ConfigFileState): AppMenuState => {
-  const validator = ajv.compile(menuSchema);
+  const validator = compileSchema(menuSchema);
   const mainConfigFile = configs.byPath['config.yml'];
-  if (!isMainConfigFIle(mainConfigFile)) {
+  if (!isMainConfigFile(mainConfigFile)) {
     throw new Error('config.yml not available');
   }
   const config = mainConfigFile.content;
@@ -382,7 +387,41 @@ export const loadAppMenu = (configs: ConfigFileState): AppMenuState => {
   };
 };
 
-export const validate = (type: string, obj: object) => {
-  const success = ajv.validate(type, obj);
-  return [success, ajv.errors];
+const globalConfigSchema = {
+  type: 'object',
+  properties: {
+    user: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        email: { type: 'string' }
+      }
+    },
+    logs: {
+      type: 'object',
+      properties: {
+        console: { type: 'string' },
+        file: { type: 'string' },
+        ipc: { type: 'string' },
+        remote: { type: 'string' }
+      }
+    }
+  }
+};
+
+export const loadGlobalConfig = async (): Promise<GlobalConfigFile> => {
+  const fullPath = path.join(app.getPath('userData'), GLOBAL_CONFIG_FILE_NAME);
+  const contentObj = await loadYamlFile(fullPath, {
+    schema: globalConfigSchema
+  });
+  return {
+    type: 'global',
+    path: fullPath,
+    content: contentObj
+  };
+};
+
+export const saveGlobalConfig = async (config: GlobalConfig): Promise<void> => {
+  const fullPath = path.join(app.getPath('userData'), GLOBAL_CONFIG_FILE_NAME);
+  await saveYamlFile(fullPath, config);
 };

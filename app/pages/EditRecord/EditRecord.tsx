@@ -49,7 +49,7 @@ import { updateDatabase } from '../../reducers/database';
 import { loadObjectFileToDatabase } from '../../services/db/dbfiles';
 import { loadData } from '../../services/db/query';
 import { assertIsDefined } from '../../types/util';
-import AddAssociationModal from '../../components/AddAssociationModal';
+import AddAssociationModal from '../../components/EditAssociationsModal';
 
 const log = elog.scope('pages/EditRecord');
 
@@ -115,6 +115,10 @@ const EditRecord = (props: Props) => {
   const history = useHistory();
   const dispatch = useDispatch();
 
+  interface TableRefMap {
+    [name: string]: React.RefObject<any>;
+  }
+
   interface FileData {
     contentObj?: any;
     contentSchema?: ObjectSchema;
@@ -131,12 +135,14 @@ const EditRecord = (props: Props) => {
   }
 
   const initialData: FileData = {};
+  const initialRefs: TableRefMap = {};
   const modalsInitialState: ModalMap = {};
 
   const [fileData, setFileData] = useState(initialData);
   const [modals, setModals] = useState(modalsInitialState);
+  const [tableRefs, setTableRefs] = useState(initialRefs);
 
-  log.debug('Database version:', db.version, schemas, history);
+  log.debug('Database version:', db.version);
   let params: any = {};
   if (rawParams !== undefined) {
     log.info('We got params:', rawParams);
@@ -156,7 +162,10 @@ const EditRecord = (props: Props) => {
       const fullPath = fullCanonicalPath(baseDir, params.path);
       const stat = await fsp.stat(fullPath);
       if (stat.mtimeMs !== fileData.modified && isObjectSchema(schema)) {
-        const rawContent = await loadYamlFile(schema, fullPath);
+        const rawContent = await loadYamlFile(fullPath, {
+          schemaId: schema.$id,
+          markAsChanged: true
+        });
         const { contentObj, associations } = extractAssociationsFromData(
           schema,
           rawContent,
@@ -167,6 +176,20 @@ const EditRecord = (props: Props) => {
           associationNames,
           associationByName
         } = extractAssociationsFromSchema(schema);
+        log.info('Setting tableRefs');
+        const refs: TableRefMap = {};
+        associationNames.forEach(name => {
+          log.info('Setting tableRef for ', name);
+          refs[name] = React.createRef();
+          const association = associationByName[name];
+          if (!associations[name]) {
+            associations[name] = {
+              modelId: association.target,
+              instances: []
+            };
+          }
+        });
+        setTableRefs(refs);
 
         console.log('Setting contentSchema to:', contentSchema);
         setFileData({
@@ -228,7 +251,7 @@ const EditRecord = (props: Props) => {
     const fullPath = fullCanonicalPath(baseDir, params.path);
     // This suppresses the file change event so we need to explicitly save to database
     // Explicit saving is more reliable than relying on file change events
-    await saveYamlFile(fullPath, data);
+    await saveYamlFile(fullPath, data, { markAsChanged: true });
     if (fileData.contentSchema) {
       await loadObjectFileToDatabase(
         relativePathFromCanonical(params.path),
@@ -243,6 +266,7 @@ const EditRecord = (props: Props) => {
 
   console.log('UI Schema:', uiSchema);
   console.log('Association names:', fileData.associationNames);
+  console.log('FileData:', fileData);
 
   return (
     <div className={classes.root}>
@@ -283,28 +307,32 @@ const EditRecord = (props: Props) => {
         ) {
           columns = params.associationColumns[associationName];
         }
-        /*
-        if (!fileData.associations[associationName]) {
-          return (
-            <div key={associationName}>
-              <p>{`No ${associationName} associations.`}</p>
-            </div>
-          );
-        }
-        */
         assertIsDefined(fileData.associationByName);
-        const hasAssociations = !!fileData.associations[associationName];
-        const isLong = hasAssociations
-          ? fileData.associations[associationName].instances.length > 5
-          : false;
+        const hasAssociations =
+          fileData.associations[associationName].instances.length > 0;
+        const isLong =
+          fileData.associations[associationName].instances.length > 5;
         const relation =
           fileData.associationByName[associationName].relationship;
-        const useAddIcon =
-          ['HasMany', 'BelongsToMany'].includes(relation) || !hasAssociations;
+        let maxAssociations = 0;
+        if (['HasOne', 'BelongsTo'].includes(relation)) {
+          maxAssociations = 1;
+        } else if (fileData.associationByName[associationName].maxItems) {
+          // TS does not respect above check for undefined so need to cast
+          maxAssociations = fileData.associationByName[associationName]
+            .maxItems as number;
+        }
+        let minAssociations = 2;
+        if (fileData.associationByName[associationName].minItems) {
+          // TS does not respect above check for undefined so need to cast
+          minAssociations = fileData.associationByName[associationName]
+            .minItems as number;
+        }
         return (
           <div key={associationName}>
             {hasAssociations ? (
               <MaterialTable
+                tableRef={tableRefs[associationName]}
                 icons={tableIcons}
                 columns={columns}
                 data={query => {
@@ -331,10 +359,8 @@ const EditRecord = (props: Props) => {
                 }}
                 actions={[
                   {
-                    icon: () => (useAddIcon ? <AddBox /> : <Edit />),
-                    tooltip: useAddIcon
-                      ? 'Add Association'
-                      : 'Change Association',
+                    icon: () => <Edit />,
+                    tooltip: 'Edit Associations',
                     isFreeAction: true,
                     onClick: () =>
                       setModals({ ...modals, [associationName]: true })
@@ -342,13 +368,35 @@ const EditRecord = (props: Props) => {
                   {
                     icon: () => <Delete />,
                     tooltip: 'Remove Association',
-                    onClick: (event, rowData: any) =>
-                      alert(`You removed ${rowData.id}`)
+                    onClick: (_event, rowData: any) => {
+                      if (
+                        fileData.associations &&
+                        fileData.associations[associationName]
+                      ) {
+                        setFileData({
+                          ...fileData,
+                          associations: {
+                            ...fileData.associations,
+                            [associationName]: {
+                              modelId:
+                                fileData.associations[associationName].modelId,
+                              instances: fileData.associations[
+                                associationName
+                              ].instances.filter(id => id !== rowData.id)
+                            }
+                          }
+                        });
+                        if (tableRefs[associationName].current) {
+                          tableRefs[associationName].current.onQueryChange();
+                        }
+                      }
+                    }
                   }
                 ]}
               />
             ) : (
               <MaterialTable
+                tableRef={tableRefs[associationName]}
                 icons={tableIcons}
                 columns={[{ title: 'Data', field: 'data' }]}
                 data={[{ data: 'No Data' }]}
@@ -361,10 +409,8 @@ const EditRecord = (props: Props) => {
                 }}
                 actions={[
                   {
-                    icon: () => (useAddIcon ? <AddBox /> : <Edit />),
-                    tooltip: useAddIcon
-                      ? 'Add Association'
-                      : 'Change Association',
+                    icon: () => <Edit />,
+                    tooltip: 'Edit Associations',
                     isFreeAction: true,
                     onClick: () =>
                       setModals({ ...modals, [associationName]: true })
@@ -377,8 +423,28 @@ const EditRecord = (props: Props) => {
               onCancel={() => {
                 setModals({ ...modals, [associationName]: false });
               }}
-              onAdd={(association: string) => {
-                alert(`Add association ${association}`);
+              onSave={(associations: Array<string>) => {
+                setModals({ ...modals, [associationName]: false });
+                if (
+                  fileData.associations &&
+                  fileData.associations[associationName]
+                ) {
+                  setFileData({
+                    ...fileData,
+                    associations: {
+                      ...fileData.associations,
+                      [associationName]: {
+                        modelId: fileData.associations[associationName].modelId,
+                        instances: associations
+                      }
+                    }
+                  });
+                  if (tableRefs[associationName].current) {
+                    tableRefs[associationName].current.onQueryChange();
+                  }
+                } else {
+                  log.error('Associations state not found!');
+                }
               }}
               columns={columns}
               schema={
@@ -390,6 +456,8 @@ const EditRecord = (props: Props) => {
                   ? fileData.associations[associationName].instances
                   : []
               }
+              maxAssociations={maxAssociations}
+              minAssociations={minAssociations}
             />
             <br />
           </div>

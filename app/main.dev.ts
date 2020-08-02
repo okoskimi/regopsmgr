@@ -11,35 +11,12 @@
 import path from 'path';
 import { app, BrowserWindow } from 'electron';
 import { autoUpdater } from 'electron-updater';
-import elog from 'electron-log';
+import elog, { LevelOption } from 'electron-log';
 import MenuBuilder from './menu';
+import { loadGlobalConfig } from './services/config';
 
 export default class AppUpdater {
   constructor() {
-    const devMainLogLevel = 'info';
-    const prodMainLogLevel = 'warn';
-    const mainLogLevel =
-      process.env.NODE_ENV === 'production'
-        ? prodMainLogLevel
-        : devMainLogLevel;
-    const debugLogLevel = 'debug'; // 'silly' level left out unless enabled here
-    elog.transports.console.level = mainLogLevel;
-    elog.transports.file.level = debugLogLevel;
-    if (elog.transports.ipc) {
-      elog.transports.ipc.level = mainLogLevel;
-    }
-    if (elog.transports.remote) {
-      elog.transports.remote.level = mainLogLevel;
-    }
-
-    console.log(
-      `Logging to console at level: ${elog.transports.console.level}`
-    );
-    console.log(
-      `Logging to ${elog.transports.file.getFile().path} at level: ${
-        elog.transports.file.level
-      }`
-    );
     autoUpdater.logger = elog.scope('autoUpdater');
     autoUpdater.checkForUpdatesAndNotify();
   }
@@ -69,7 +46,53 @@ const installExtensions = async () => {
   ).catch(console.log);
 };
 
+const isLevelOption = (option: string | boolean): option is LevelOption => {
+  if (typeof option === 'string') {
+    return ['silly', 'verbose', 'debug', 'info', 'warn', 'error'].includes(
+      option
+    );
+  }
+  return option === false;
+};
+
 const createWindow = async () => {
+  elog.transports.console.level =
+    process.env.NODE_ENV === 'development' ? 'info' : 'warn';
+  elog.transports.file.level =
+    process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true'
+      ? 'debug'
+      : 'info';
+  if (elog.transports.ipc) {
+    elog.transports.ipc.level = false;
+  }
+  if (elog.transports.remote) {
+    elog.transports.remote.level = false;
+  }
+  try {
+    const config = await loadGlobalConfig();
+    if (isLevelOption(config.content.log.console)) {
+      elog.transports.console.level = config.content.log.console;
+    }
+    if (isLevelOption(config.content.log.file)) {
+      elog.transports.file.level = config.content.log.file;
+    }
+    if (isLevelOption(config.content.log.ipc) && elog.transports.ipc) {
+      elog.transports.ipc.level = config.content.log.ipc;
+    }
+    if (isLevelOption(config.content.log.remote) && elog.transports.remote) {
+      elog.transports.remote.level = config.content.log.remote;
+    }
+  } catch (ignore) {
+    // ignore
+  }
+
+  console.log(`Logging to console at level: ${elog.transports.console.level}`);
+  console.log(
+    `Logging to ${elog.transports.file.getFile().path} at level: ${
+      elog.transports.file.level
+    }`
+  );
+
   if (
     process.env.NODE_ENV === 'development' ||
     process.env.DEBUG_PROD === 'true'

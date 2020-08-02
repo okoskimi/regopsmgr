@@ -11,7 +11,7 @@ import {
 } from '@material-ui/core/styles';
 import CssBaseline from '@material-ui/core/CssBaseline';
 import Hidden from '@material-ui/core/Hidden';
-import elog from 'electron-log';
+import elog, { LevelOption } from 'electron-log';
 
 // import Typography from '@material-ui/core/Typography';
 // import Link from '@material-ui/core/Link';
@@ -99,15 +99,65 @@ const connector = connect(mapState, mapDispatch);
 
 type Props = ConnectedProps<typeof connector> & OwnProps;
 
+const isLevelOption = (option: string | boolean): option is LevelOption => {
+  if (typeof option === 'string') {
+    return ['silly', 'verbose', 'debug', 'info', 'warn', 'error'].includes(
+      option
+    );
+  }
+  return option === false;
+};
+
 function App(props: Props) {
   const { classes, configFiles, schemas, database, initConfigFiles, initSchemas, initAppMenu, initDatabase, loadFilesToDatabase } = props;
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [configsLoaded, setConfigsLoaded] = React.useState(false);
   const notify  = useNotification();
 
   useEffect(() => {
     log.info('calling initConfigFiles');
-    initConfigFiles(notify);
-  }, []);
+    if (!configsLoaded) {
+      initConfigFiles(notify);
+      if (configFiles.global) {
+        elog.transports.console.level =
+          process.env.NODE_ENV === 'development' ? 'info' : 'warn';
+        elog.transports.file.level =
+          process.env.NODE_ENV === 'development' || process.env.DEBUG_PROD === 'true'
+            ? 'debug'
+            : 'info';
+        if (elog.transports.ipc) {
+          elog.transports.ipc.level = false;
+        }
+        if (elog.transports.remote) {
+          elog.transports.remote.level = false;
+        }
+        try {
+          if (isLevelOption(configFiles.global.content.log.console)) {
+            elog.transports.console.level = configFiles.global.content.log.console;
+          }
+          if (isLevelOption(configFiles.global.content.log.file)) {
+            elog.transports.file.level = configFiles.global.content.log.file;
+          }
+          if (isLevelOption(configFiles.global.content.log.ipc) && elog.transports.ipc) {
+            elog.transports.ipc.level = configFiles.global.content.log.ipc;
+          }
+          if (isLevelOption(configFiles.global.content.log.remote) && elog.transports.remote) {
+            elog.transports.remote.level = configFiles.global.content.log.remote;
+          }
+        } catch (ignore) {
+          // ignore
+        }
+
+        console.log(`Logging to console at level: ${elog.transports.console.level}`);
+        console.log(
+          `Logging to ${elog.transports.file.getFile().path} at level: ${
+            elog.transports.file.level
+          }`
+        );
+      }
+      setConfigsLoaded(true);
+    }
+  }, [configsLoaded]);
 
   useEffect(() => {
     // log.info('Calling initSchemas for', configFiles);

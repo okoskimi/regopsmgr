@@ -4,8 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import elog from 'electron-log';
 
 import { assertIsDefined } from '../types/util';
-import { ObjectSchema } from '../types/schema';
-import { validate } from './config';
+import { validateType, validateSchema } from '../types/validation';
 import { markAsChanged } from './files';
 
 const log = elog.scope('services/yaml');
@@ -168,7 +167,16 @@ const copyComments = (fromDoc: YAML.Document, toDoc: YAML.Document) => {
 // Although this can be done outside of this function, it is more efficient to obtain
 // the parsed object by doing doc.toJSON(), i.e.
 // modifiedObjWithOriginalOrder = lodash.merge(doc.toJSON(), modifiedObj)
-export const saveYamlFile = async (fullPath: string, modifiedObj: any) => {
+
+interface SaveYamlFileOptions {
+  markAsChanged?: boolean;
+}
+
+export const saveYamlFile = async (
+  fullPath: string,
+  modifiedObj: any,
+  options: SaveYamlFileOptions = {}
+) => {
   let fileContents = null;
   try {
     fileContents = await fsp.readFile(fullPath, 'utf8');
@@ -179,37 +187,61 @@ export const saveYamlFile = async (fullPath: string, modifiedObj: any) => {
     const doc = YAML.parseDocument(fileContents);
     const modifiedDoc = YAML.parseDocument(YAML.stringify(modifiedObj));
     copyComments(doc, modifiedDoc);
-    markAsChanged(fullPath);
+    if (options.markAsChanged) {
+      markAsChanged(fullPath);
+    }
     await fsp.writeFile(fullPath, modifiedDoc.toString());
   } else {
-    markAsChanged(fullPath);
+    if (options.markAsChanged) {
+      markAsChanged(fullPath);
+    }
     await fsp.writeFile(fullPath, YAML.stringify(modifiedObj));
   }
 };
 
+interface LoadYamlFileOptions {
+  schemaId?: string;
+  schema?: object;
+  forceId?: boolean;
+  markAsChanged?: boolean;
+}
+
 export const loadYamlFile = async (
-  schema: ObjectSchema,
-  fullPath: string
+  fullPath: string,
+  options: LoadYamlFileOptions = {}
 ): Promise<any> => {
   const contentStr = await fsp.readFile(fullPath, { encoding: 'utf8' });
   const contentObj = YAML.parse(contentStr);
-  if (!contentObj.id) {
+  if (options.forceId && !contentObj.id) {
     // Force ID to be first property so that it is first in YAML file
     const yamlData = {
       id: uuidv4(),
       ...contentObj
     };
     log.info('Saving ID to ', fullPath);
-    markAsChanged(fullPath);
-    await saveYamlFile(fullPath, yamlData);
+    await saveYamlFile(fullPath, yamlData, {
+      markAsChanged: !!options.markAsChanged
+    });
     contentObj.id = yamlData.id;
   }
-  const [success, errors] = validate(schema.$id, contentObj);
-  if (!success) {
-    log.error('Could not validate:', contentObj);
-    throw new Error(
-      `Failed schema validation for schema ${schema}: ${JSON.stringify(errors)}`
-    );
+  if (options.schemaId) {
+    const [success, errors] = validateType(options.schemaId, contentObj);
+    if (!success) {
+      log.error('Could not validate:', contentObj);
+      throw new Error(
+        `Failed schema validation for schema ${fullPath}: ${JSON.stringify(
+          errors
+        )}`
+      );
+    }
+  } else if (options.schema) {
+    const [success, errors] = validateSchema(options.schema, contentObj);
+    if (!success) {
+      log.error('Could not validate:', contentObj);
+      throw new Error(
+        `Failed schema validation for ${fullPath}: ${JSON.stringify(errors)}`
+      );
+    }
   }
   return contentObj;
 };

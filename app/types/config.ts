@@ -16,16 +16,35 @@ export interface MainConfigFile {
   path: string;
   content: MainConfig;
 }
+export interface GlobalConfigFile {
+  type: 'global';
+  path: string;
+  content: GlobalConfig;
+}
+
 export interface MainConfig {
   home: MenuItem;
   categories: Array<MenuCategory>;
 }
+export interface GlobalConfig {
+  user: {
+    name: string;
+    email: string;
+  };
+  log: {
+    console: string;
+    file: string;
+    ipc: string;
+    remote: string;
+  };
+}
+
 export type ConfigFile = BinaryConfigFile | SchemaConfigFile | MainConfigFile;
 export const isSchemaConfigFile = (
   file: ConfigFile
 ): file is SchemaConfigFile => {
   return file.type === 'schema';
 };
-export const isMainConfigFIle = (file: ConfigFile): file is MainConfigFile => {
+export const isMainConfigFile = (file: ConfigFile): file is MainConfigFile => {
   return file.type === 'main';
 };

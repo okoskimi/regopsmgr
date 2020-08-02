@@ -24,7 +24,10 @@ export const loadObjectFileToDatabase = async (
   try {
     const fullPath = fullCanonicalPath(gitDir, path);
     log.info(`Loading file ${path} of type ${schema.name}`);
-    const jsonObj = await loadYamlFile(schema, fullPath);
+    const jsonObj = await loadYamlFile(fullPath, {
+      schemaId: schema.$id,
+      markAsChanged: true
+    });
     const { contentObj, associations } = extractAssociationsFromData(
       schema,
       jsonObj

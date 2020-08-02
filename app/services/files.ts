@@ -113,6 +113,8 @@ export const extractAssociationsFromData = (
 export interface AssociationDefinition {
   target: string;
   relationship: string;
+  maxItems?: number;
+  minItems?: number;
 }
 
 export interface SchemaExtractResult {

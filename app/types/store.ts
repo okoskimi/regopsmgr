@@ -3,7 +3,7 @@ import { Dispatch as ReduxDispatch, Store as ReduxStore, Action } from 'redux';
 import { RouterState } from 'connected-react-router';
 // import pathlib from 'path';
 
-import { ConfigFile } from './config';
+import { ConfigFile, GlobalConfigFile } from './config';
 import { Schema } from './schema';
 import { MenuItem, MenuCategory, Notification } from './app';
 // import { FileEntry, DirectoryEntry } from './file';
@@ -18,9 +18,12 @@ export class ConfigFileState {
 
   data: Array<ConfigFile>;
 
+  global: GlobalConfigFile | null;
+
   constructor() {
     this.byPath = {};
     this.data = [];
+    this.global = null;
   }
 }
 

@@ -4,8 +4,9 @@ import { ThunkAction } from 'redux-thunk';
 import elog from 'electron-log';
 
 import { Dispatch, RootState, ConfigFileState } from '../types/store';
-import { getConfigFiles } from '../services/config';
+import { getConfigFilesFromGit, loadGlobalConfig } from '../services/config';
 import { Notifier } from './notifications';
+import { GlobalConfigFile } from '../types/config';
 
 const log = elog.scope('reducers/configFiles');
 
@@ -28,12 +29,20 @@ export const initConfigFiles = (
 ): ThunkAction<void, RootState, unknown, Action<string>> => {
   return async (dispatch: Dispatch) => {
     try {
-      log.info('Loading config files');
-      const configFiles = await getConfigFiles(
+      log.info('Loading global config file');
+      let globalConfig: GlobalConfigFile | null = null;
+      try {
+        globalConfig = await loadGlobalConfig();
+      } catch (ignore) {
+        // ignore
+      }
+      log.info('Loading git config files');
+      const configFiles = await getConfigFilesFromGit(
         path.join(process.cwd(), '..', 'branchtest')
       );
+      configFiles.global = globalConfig;
       dispatch(setConfigFiles(configFiles));
-      log.info('Loaded config files', configFiles.data);
+      log.info('Loaded config files', configFiles.data, configFiles.global);
       notify.success(
         `Loaded ${Object.keys(configFiles.data).length} configuration files.`
       );
