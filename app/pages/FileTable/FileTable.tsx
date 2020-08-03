@@ -94,7 +94,7 @@ const FileTable = (props: Props) => {
   let params: any = {};
   if (rawParams !== undefined) {
     log.info('We got params:', rawParams);
-    params = JSON.parse(decodeURIComponent(rawParams));
+    params = JSON.parse(Buffer.from(rawParams, 'base64').toString());
     log.info('Parsed params to:', params);
     if (params.filter) {
       params.filter = convertFilter(params.filter);
@@ -177,9 +177,9 @@ const FileTable = (props: Props) => {
                   linkParams.uiSchema = params.uiSchemas[eventRowData.schemaId];
                 }
                 history.push(
-                  `/EditRecord/${encodeURIComponent(
+                  `/EditRecord/${Buffer.from(
                     JSON.stringify(linkParams)
-                  )}`
+                  ).toString('base64')}`
                 );
               },
               hidden: !schema || schema.type !== 'object'

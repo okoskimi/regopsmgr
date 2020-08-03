@@ -146,7 +146,7 @@ const EditRecord = (props: Props) => {
   let params: any = {};
   if (rawParams !== undefined) {
     log.info('We got params:', rawParams);
-    params = JSON.parse(decodeURIComponent(rawParams));
+    params = JSON.parse(Buffer.from(rawParams, 'base64').toString());
     log.info('Parsed params to:', params);
   } else {
     log.info('No params provided');
@@ -322,7 +322,7 @@ const EditRecord = (props: Props) => {
           maxAssociations = fileData.associationByName[associationName]
             .maxItems as number;
         }
-        let minAssociations = 2;
+        let minAssociations = 0;
         if (fileData.associationByName[associationName].minItems) {
           // TS does not respect above check for undefined so need to cast
           minAssociations = fileData.associationByName[associationName]
@@ -399,7 +399,11 @@ const EditRecord = (props: Props) => {
                 tableRef={tableRefs[associationName]}
                 icons={tableIcons}
                 columns={[{ title: 'Data', field: 'data' }]}
-                data={[{ data: 'No Data' }]}
+                data={async _query => ({
+                  data: [{ data: 'No Data' }],
+                  page: 0,
+                  totalCount: 1
+                })}
                 title={associationName}
                 options={{
                   padding: 'default',

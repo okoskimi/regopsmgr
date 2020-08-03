@@ -99,6 +99,10 @@ export const extractAssociationsFromData = (
         delete contentObj[key];
       }
     } else {
+      log.error(
+        `Undefined schema property ${key} on schema ${schema.name}`,
+        schema
+      );
       throw new Error(
         `Undefined schema property ${key} on schema ${schema.name}`
       );
@@ -129,7 +133,8 @@ export const extractAssociationsFromSchema = (
   schema: ObjectSchema
 ): SchemaExtractResult => {
   const result: SchemaExtractResult = {
-    contentSchema: { ...schema },
+    // Need to create a copy of schema.properties since they get removed
+    contentSchema: { ...schema, properties: { ...schema.properties } },
     associationNames: [],
     associationByName: {}
   };

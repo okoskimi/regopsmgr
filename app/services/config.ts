@@ -362,13 +362,13 @@ export const loadAppMenu = (configs: ConfigFileState): AppMenuState => {
       name: mainConfigFile.content.home.name,
       icon: mainConfigFile.content.home.icon,
       path: mainConfigFile.content.home.path,
-      pathWithParams: `${mainConfigFile.content.home.path}/${encodeURIComponent(
+      pathWithParams: `${mainConfigFile.content.home.path}/${Buffer.from(
         JSON.stringify(
           mainConfigFile.content.home.params
             ? mainConfigFile.content.home.params
             : {}
         )
-      )}`,
+      ).toString('base64')}`,
       id: uuidv4()
     },
     categories: mainConfigFile.content.categories.map(category => ({
@@ -378,9 +378,9 @@ export const loadAppMenu = (configs: ConfigFileState): AppMenuState => {
         name: item.name,
         icon: item.icon,
         path: item.path,
-        pathWithParams: `${item.path}/${encodeURIComponent(
+        pathWithParams: `${item.path}/${Buffer.from(
           JSON.stringify(item.params ? item.params : {})
-        )}`,
+        ).toString('base64')}`,
         id: uuidv4()
       }))
     }))
