@@ -24,7 +24,6 @@ import ChevronLeft from '@material-ui/icons/ChevronLeft';
 import ChevronRight from '@material-ui/icons/ChevronRight';
 import Clear from '@material-ui/icons/Clear';
 import DeleteOutline from '@material-ui/icons/DeleteOutline';
-import Delete from '@material-ui/icons/Delete';
 import Edit from '@material-ui/icons/Edit';
 import FilterList from '@material-ui/icons/FilterList';
 import FirstPage from '@material-ui/icons/FirstPage';
@@ -44,10 +43,10 @@ import {
   AssociationDefinition
 } from '../../services/files';
 import { ObjectSchema, isObjectSchema } from '../../types/schema';
-import { saveYamlFile, loadYamlFile } from '../../services/yaml';
+import { saveYamlFile, loadYamlFile, Comments } from '../../services/yaml';
 import { updateDatabase } from '../../reducers/database';
 import { loadObjectFileToDatabase } from '../../services/db/dbfiles';
-import { loadData } from '../../services/db/query';
+import { loadData, loadAssociationMap } from '../../services/db/query';
 import { assertIsDefined } from '../../types/util';
 import AddAssociationModal from '../../components/EditAssociationsModal';
 
@@ -119,11 +118,15 @@ const EditRecord = (props: Props) => {
     [name: string]: React.RefObject<any>;
   }
 
-  interface FileData {
+  interface RecordData {
     contentObj?: any;
-    contentSchema?: ObjectSchema;
     modified?: number;
     associations?: AssociationDataMap;
+    associationVersion: number;
+  }
+
+  interface RecordSchema {
+    contentSchema?: ObjectSchema;
     associationNames?: Array<string>;
     associationByName?: {
       [name: string]: AssociationDefinition;
@@ -134,11 +137,13 @@ const EditRecord = (props: Props) => {
     [name: string]: boolean;
   }
 
-  const initialData: FileData = {};
+  const initialRecordData: RecordData = { associationVersion: 0 };
+  const initialRecordSchema: RecordSchema = {};
   const initialRefs: TableRefMap = {};
   const modalsInitialState: ModalMap = {};
 
-  const [fileData, setFileData] = useState(initialData);
+  const [recordData, setRecordData] = useState(initialRecordData);
+  const [recordSchema, setRecordSchema] = useState(initialRecordSchema);
   const [modals, setModals] = useState(modalsInitialState);
   const [tableRefs, setTableRefs] = useState(initialRefs);
 
@@ -161,7 +166,7 @@ const EditRecord = (props: Props) => {
       const baseDir = pathlib.join(process.cwd(), '..', 'branchtest');
       const fullPath = fullCanonicalPath(baseDir, params.path);
       const stat = await fsp.stat(fullPath);
-      if (stat.mtimeMs !== fileData.modified && isObjectSchema(schema)) {
+      if (stat.mtimeMs !== recordData.modified && isObjectSchema(schema)) {
         const rawContent = await loadYamlFile(fullPath, {
           schemaId: schema.$id,
           markAsChanged: true
@@ -192,13 +197,16 @@ const EditRecord = (props: Props) => {
         setTableRefs(refs);
 
         console.log('Setting contentSchema to:', contentSchema);
-        setFileData({
+        setRecordData({
           contentObj,
-          contentSchema,
           associations,
+          modified: stat.mtimeMs,
+          associationVersion: recordData.associationVersion + 1
+        });
+        setRecordSchema({
+          contentSchema,
           associationNames,
-          associationByName,
-          modified: stat.mtimeMs
+          associationByName
         });
       }
     };
@@ -225,10 +233,10 @@ const EditRecord = (props: Props) => {
   }
 
   if (
-    !fileData.contentObj ||
-    !fileData.contentSchema ||
-    !fileData.associations ||
-    !fileData.associationNames
+    !recordData.contentObj ||
+    !recordSchema.contentSchema ||
+    !recordData.associations ||
+    !recordSchema.associationNames
   ) {
     return (
       <div>
@@ -241,22 +249,55 @@ const EditRecord = (props: Props) => {
   };
   if (params.uiSchema) {
     uiSchema = params.uiSchema;
-  } else if (fileData.contentSchema.uiSchema) {
-    uiSchema = fileData.contentSchema.uiSchema;
+  } else if (recordSchema.contentSchema.uiSchema) {
+    uiSchema = recordSchema.contentSchema.uiSchema;
   }
 
   // Save to file and database
   const saveData = async (data: any) => {
+    assertIsDefined(recordData.associations);
+    assertIsDefined(recordSchema.associationNames);
+    console.log('Saving with associations:', recordData.associations);
+    const dataWithAssociations = { ...data };
+    const associationMap = await loadAssociationMap(recordData.associations);
+    const comments: Comments = {};
+    Object.keys(associationMap).forEach(key => {
+      comments[key] = {
+        comment: (associationMap[key] as any).name,
+        force: true
+      };
+    });
+    recordSchema.associationNames.forEach(associationName => {
+      assertIsDefined(recordData.associations);
+      assertIsDefined(recordSchema.associationByName);
+      if (recordData.associations[associationName].instances.length > 0) {
+        if (
+          ['BelongsToMany', 'HasMany'].includes(
+            recordSchema.associationByName[associationName].relationship
+          )
+        ) {
+          const value = recordData.associations[associationName].instances;
+          dataWithAssociations[associationName] = value;
+        } else {
+          const value = recordData.associations[associationName].instances[0];
+          dataWithAssociations[associationName] = value;
+        }
+      }
+    });
+    // Fetch names for each association
     const baseDir = pathlib.join(process.cwd(), '..', 'branchtest');
     const fullPath = fullCanonicalPath(baseDir, params.path);
     // This suppresses the file change event so we need to explicitly save to database
     // Explicit saving is more reliable than relying on file change events
-    await saveYamlFile(fullPath, data, { markAsChanged: true });
-    if (fileData.contentSchema) {
+    await saveYamlFile(fullPath, dataWithAssociations, {
+      markAsChanged: true,
+      comments
+    });
+    if (isObjectSchema(schema)) {
       await loadObjectFileToDatabase(
         relativePathFromCanonical(params.path),
         baseDir,
-        fileData.contentSchema
+        schema
       );
       dispatch(updateDatabase());
     } else {
@@ -265,21 +306,149 @@ const EditRecord = (props: Props) => {
   };
 
   console.log('UI Schema:', uiSchema);
-  console.log('Association names:', fileData.associationNames);
-  console.log('FileData:', fileData);
+  console.log('Association names:', recordSchema.associationNames);
+  console.log('FileData:', recordData);
 
   return (
     <div className={classes.root}>
       <h2>{`Edit ${schema.name}`}</h2>
       <Form
-        schema={fileData.contentSchema as any}
-        formData={fileData.contentObj}
+        schema={recordSchema.contentSchema as any}
+        formData={recordData.contentObj}
         uiSchema={uiSchema}
         onSubmit={event => {
           saveData(event.formData);
           history.goBack();
         }}
       >
+        <div>
+          <hr />
+          <h3>Associations</h3>
+          {recordSchema.associationNames.map(associationName => {
+            assertIsDefined(recordData.associations);
+            console.log('Rendering association:', associationName);
+            console.log('Data:', recordData.associations[associationName]);
+            let columns = defaultAssociationColumns;
+            if (
+              params.associationColumns &&
+              params.associationColumns[associationName]
+            ) {
+              columns = params.associationColumns[associationName];
+            }
+            assertIsDefined(recordSchema.associationByName);
+            const hasAssociations =
+              recordData.associations[associationName].instances.length > 0;
+            const isLong =
+              recordData.associations[associationName].instances.length > 5;
+            const relation =
+              recordSchema.associationByName[associationName].relationship;
+            let maxAssociations = 0;
+            if (['HasOne', 'BelongsTo'].includes(relation)) {
+              maxAssociations = 1;
+            } else if (
+              recordSchema.associationByName[associationName].maxItems
+            ) {
+              // TS does not respect above check for undefined so need to cast
+              maxAssociations = recordSchema.associationByName[associationName]
+                .maxItems as number;
+            }
+            let minAssociations = 0;
+            if (recordSchema.associationByName[associationName].minItems) {
+              // TS does not respect above check for undefined so need to cast
+              minAssociations = recordSchema.associationByName[associationName]
+                .minItems as number;
+            }
+            return (
+              <div key={associationName}>
+                <MaterialTable
+                  tableRef={tableRefs[associationName]}
+                  icons={tableIcons}
+                  columns={columns}
+                  data={query => {
+                    log.info('MaterialTable data request:', query);
+                    assertIsDefined(recordSchema.contentSchema);
+                    assertIsDefined(recordData.associations);
+                    return loadData(
+                      recordData.associations[associationName].modelId,
+                      query.page,
+                      query.pageSize,
+                      query.search,
+                      columns,
+                      query.orderBy,
+                      query.orderDirection,
+                      query.filters,
+                      {
+                        id: recordData.associations[associationName].instances
+                      }
+                    );
+                  }}
+                  title={associationName}
+                  options={{
+                    padding: 'dense',
+                    search: isLong,
+                    paging: isLong
+                  }}
+                  actions={[
+                    {
+                      icon: () => <Edit />,
+                      tooltip: 'Edit Associations',
+                      isFreeAction: true,
+                      onClick: () =>
+                        setModals({ ...modals, [associationName]: true })
+                    }
+                  ]}
+                />
+                <AddAssociationModal
+                  open={!!modals[associationName]}
+                  onCancel={() => {
+                    setModals({ ...modals, [associationName]: false });
+                  }}
+                  onOk={(associations: Array<string>) => {
+                    setModals({ ...modals, [associationName]: false });
+                    if (
+                      recordData.associations &&
+                      recordData.associations[associationName]
+                    ) {
+                      setRecordData({
+                        ...recordData,
+                        associationVersion: recordData.associationVersion + 1,
+                        associations: {
+                          ...recordData.associations,
+                          [associationName]: {
+                            modelId:
+                              recordData.associations[associationName].modelId,
+                            instances: associations
+                          }
+                        }
+                      });
+                      if (tableRefs[associationName].current) {
+                        tableRefs[associationName].current.onQueryChange();
+                      }
+                    } else {
+                      log.error('Associations state not found!');
+                    }
+                  }}
+                  columns={columns}
+                  schema={
+                    schemas.byId[
+                      recordSchema.associationByName[associationName].target
+                    ]
+                  }
+                  associationName={associationName}
+                  associations={
+                    hasAssociations
+                      ? recordData.associations[associationName].instances
+                      : []
+                  }
+                  dataVersion={recordData.associationVersion}
+                  maxAssociations={maxAssociations}
+                  minAssociations={minAssociations}
+                />
+                <br />
+              </div>
+            );
+          })}
+        </div>
         <div className={classes.buttons}>
           <Button type="submit" variant="contained" color="primary">
             Save
@@ -294,179 +463,6 @@ const EditRecord = (props: Props) => {
           </Button>
         </div>
       </Form>
-      <hr />
-      <h3>Associations</h3>
-      {fileData.associationNames.map(associationName => {
-        assertIsDefined(fileData.associations);
-        console.log('Rendering association:', associationName);
-        console.log('Data:', fileData.associations[associationName]);
-        let columns = defaultAssociationColumns;
-        if (
-          params.associationColumns &&
-          params.associationColumns[associationName]
-        ) {
-          columns = params.associationColumns[associationName];
-        }
-        assertIsDefined(fileData.associationByName);
-        const hasAssociations =
-          fileData.associations[associationName].instances.length > 0;
-        const isLong =
-          fileData.associations[associationName].instances.length > 5;
-        const relation =
-          fileData.associationByName[associationName].relationship;
-        let maxAssociations = 0;
-        if (['HasOne', 'BelongsTo'].includes(relation)) {
-          maxAssociations = 1;
-        } else if (fileData.associationByName[associationName].maxItems) {
-          // TS does not respect above check for undefined so need to cast
-          maxAssociations = fileData.associationByName[associationName]
-            .maxItems as number;
-        }
-        let minAssociations = 0;
-        if (fileData.associationByName[associationName].minItems) {
-          // TS does not respect above check for undefined so need to cast
-          minAssociations = fileData.associationByName[associationName]
-            .minItems as number;
-        }
-        return (
-          <div key={associationName}>
-            {hasAssociations ? (
-              <MaterialTable
-                tableRef={tableRefs[associationName]}
-                icons={tableIcons}
-                columns={columns}
-                data={query => {
-                  log.info('MaterialTable data request:', query);
-                  assertIsDefined(fileData.contentSchema);
-                  assertIsDefined(fileData.associations);
-                  return loadData(
-                    fileData.associations[associationName].modelId,
-                    query.page,
-                    query.pageSize,
-                    query.search,
-                    columns,
-                    query.orderBy,
-                    query.orderDirection,
-                    query.filters,
-                    { id: fileData.associations[associationName].instances }
-                  );
-                }}
-                title={associationName}
-                options={{
-                  padding: 'dense',
-                  search: isLong,
-                  paging: isLong
-                }}
-                actions={[
-                  {
-                    icon: () => <Edit />,
-                    tooltip: 'Edit Associations',
-                    isFreeAction: true,
-                    onClick: () =>
-                      setModals({ ...modals, [associationName]: true })
-                  },
-                  {
-                    icon: () => <Delete />,
-                    tooltip: 'Remove Association',
-                    onClick: (_event, rowData: any) => {
-                      if (
-                        fileData.associations &&
-                        fileData.associations[associationName]
-                      ) {
-                        setFileData({
-                          ...fileData,
-                          associations: {
-                            ...fileData.associations,
-                            [associationName]: {
-                              modelId:
-                                fileData.associations[associationName].modelId,
-                              instances: fileData.associations[
-                                associationName
-                              ].instances.filter(id => id !== rowData.id)
-                            }
-                          }
-                        });
-                        if (tableRefs[associationName].current) {
-                          tableRefs[associationName].current.onQueryChange();
-                        }
-                      }
-                    }
-                  }
-                ]}
-              />
-            ) : (
-              <MaterialTable
-                tableRef={tableRefs[associationName]}
-                icons={tableIcons}
-                columns={[{ title: 'Data', field: 'data' }]}
-                data={async _query => ({
-                  data: [{ data: 'No Data' }],
-                  page: 0,
-                  totalCount: 1
-                })}
-                title={associationName}
-                options={{
-                  padding: 'default',
-                  search: false,
-                  header: false,
-                  paging: false
-                }}
-                actions={[
-                  {
-                    icon: () => <Edit />,
-                    tooltip: 'Edit Associations',
-                    isFreeAction: true,
-                    onClick: () =>
-                      setModals({ ...modals, [associationName]: true })
-                  }
-                ]}
-              />
-            )}
-            <AddAssociationModal
-              open={!!modals[associationName]}
-              onCancel={() => {
-                setModals({ ...modals, [associationName]: false });
-              }}
-              onSave={(associations: Array<string>) => {
-                setModals({ ...modals, [associationName]: false });
-                if (
-                  fileData.associations &&
-                  fileData.associations[associationName]
-                ) {
-                  setFileData({
-                    ...fileData,
-                    associations: {
-                      ...fileData.associations,
-                      [associationName]: {
-                        modelId: fileData.associations[associationName].modelId,
-                        instances: associations
-                      }
-                    }
-                  });
-                  if (tableRefs[associationName].current) {
-                    tableRefs[associationName].current.onQueryChange();
-                  }
-                } else {
-                  log.error('Associations state not found!');
-                }
-              }}
-              columns={columns}
-              schema={
-                schemas.byId[fileData.associationByName[associationName].target]
-              }
-              associationName={associationName}
-              associations={
-                hasAssociations
-                  ? fileData.associations[associationName].instances
-                  : []
-              }
-              maxAssociations={maxAssociations}
-              minAssociations={minAssociations}
-            />
-            <br />
-          </div>
-        );
-      })}
     </div>
   );
 };

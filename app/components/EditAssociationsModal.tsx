@@ -88,13 +88,14 @@ interface Column {
 interface OwnProps extends WithStyles<typeof styles> {
   open: boolean;
   onCancel: () => void;
-  onSave: (associations: Array<string>) => void;
+  onOk: (associations: Array<string>) => void;
   schema: Schema;
   associationName: string;
   associations: Array<string>;
   minAssociations: number;
   maxAssociations: number;
   columns: Array<Column>;
+  dataVersion: number;
 }
 const mapState = (state: RootState) => ({
   db: state.database
@@ -110,15 +111,17 @@ const EditAssociationsModal = (props: Props) => {
     db,
     open,
     onCancel,
-    onSave,
+    onOk,
     schema,
     associationName,
     associations,
     minAssociations,
     maxAssociations,
-    columns
+    columns,
+    dataVersion
   } = props;
 
+  const [currentVersion, setCurrentVersion] = useState(dataVersion);
   const [selected, setSelected] = useState(associations);
   const [maxErrorMsg, setMaxErrorMsg] = useState('');
   const [minErrorMsg, setMinErrorMsg] = useState('');
@@ -139,6 +142,10 @@ const EditAssociationsModal = (props: Props) => {
     log.info(
       `Setting messages, ${selected.length} associations, max is ${maxAssociations}, min is ${minAssociations}`
     );
+    if (currentVersion !== dataVersion) {
+      setSelected(associations);
+      setCurrentVersion(dataVersion);
+    }
     if (maxAssociations > 0) {
       if (selected.length > maxAssociations) {
         // Exceeding maximum will always be more than one so plural will always be correct
@@ -189,16 +196,15 @@ const EditAssociationsModal = (props: Props) => {
     } else if (minErrorMsg) {
       setMinErrorMsg('');
     }
-  }, [selected, maxAssociations, minAssociations]);
+  }, [dataVersion, currentVersion, selected, maxAssociations, minAssociations]);
 
   const handleSave = () => {
     log.info('handleAdd');
-    onSave(selected);
+    onOk(selected);
   };
 
   const handleCancel = () => {
     log.info('handleCancel');
-    setSelected(associations);
     onCancel();
   };
 
@@ -254,18 +260,25 @@ const EditAssociationsModal = (props: Props) => {
             showSelectAllCheckbox: false,
             showTextRowsSelected: false
           }}
-          onSelectionChange={rows => {
-            let newSelection = rows.map(row => row.id as string);
+          onSelectionChange={(selectedRows: any, dataClicked: any) => {
+            log.debug('onSelectionChange', selectedRows, dataClicked);
+            let newSelection = [...selected];
+            if (dataClicked.tableData.checked) {
+              newSelection.push(dataClicked.id);
+            } else {
+              // Remove dataClicked from selection
+              newSelection = newSelection.filter(id => dataClicked.id !== id);
+            }
             if (
               maxAssociations === 1 &&
               newSelection.length > maxAssociations
             ) {
               // Automatically deselect previous selection
               newSelection = newSelection.filter(id => !selected.includes(id));
-              for (let i = 0; i < rows.length; i++) {
-                if (!newSelection.includes(rows[i].id as string)) {
+              for (let i = 0; i < selectedRows.length; i++) {
+                if (!newSelection.includes(selectedRows[i].id as string)) {
                   // eslint-disable-next-line no-param-reassign
-                  (rows[i].tableData as any).checked = false;
+                  (selectedRows[i].tableData as any).checked = false;
                 }
               }
             }
@@ -286,7 +299,7 @@ const EditAssociationsModal = (props: Props) => {
             selected.length < minAssociations
           }
         >
-          Save
+          OK
         </Button>
       </DialogActions>
     </Dialog>

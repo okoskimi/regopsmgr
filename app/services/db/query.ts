@@ -3,6 +3,7 @@ import { Column } from 'material-table';
 import elog from 'electron-log';
 
 import { database } from '.';
+import { AssociationDataMap } from '../files';
 import { isModelWithAssociations } from './model';
 
 const log = elog.scope('services/db/query');
@@ -153,6 +154,31 @@ export const loadData = async (
     page,
     totalCount: count
   };
+};
+
+export interface ModelMap {
+  [id: string]: Model;
+}
+
+export const loadAssociationMap = async (
+  dataMap: AssociationDataMap
+): Promise<ModelMap> => {
+  const promises: Array<Promise<Array<Model>>> = [];
+  Object.keys(dataMap).forEach(associationName => {
+    const { modelId, instances } = dataMap[associationName];
+    if (instances.length > 0) {
+      const model = database.models[modelId];
+      promises.push(model.findAll({ where: { id: instances } }));
+    }
+  });
+  const result: ModelMap = {};
+  const findResults = await Promise.all(promises);
+  findResults.forEach(findResult => {
+    findResult.forEach((instance: any) => {
+      result[instance.id] = instance;
+    });
+  });
+  return result;
 };
 
 export const loadAssociations = async (

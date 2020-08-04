@@ -306,7 +306,7 @@
     "source-map-support": "^0.5.16",
     "typeface-roboto": "^0.0.75",
     "uuid": "^8.0.0",
-    "yaml": "^1.9.2"
+    "yaml": "1.9.2"
   },
   "devEngines": {
     "node": ">=7.x",

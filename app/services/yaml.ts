@@ -1,5 +1,6 @@
 import { promises as fsp } from 'fs';
 import YAML from 'yaml';
+import { Scalar } from 'yaml/types';
 import { v4 as uuidv4 } from 'uuid';
 import elog from 'electron-log';
 
@@ -9,7 +10,51 @@ import { markAsChanged } from './files';
 
 const log = elog.scope('services/yaml');
 
-const copyComments = (fromDoc: YAML.Document, toDoc: YAML.Document) => {
+interface Node extends YAML.AST.Node {
+  _comment_already_used_: boolean;
+}
+
+const isScalar = (node: any): node is Scalar => {
+  return node instanceof Scalar;
+};
+
+interface Pair extends YAML.AST.Node {
+  key: YAML.AST.ScalarNode;
+  value: YAML.AST.Node;
+}
+
+const isPair = (node: any): node is Pair => {
+  return node.type === 'PAIR';
+};
+
+interface Map extends YAML.AST.Node {
+  items: Array<Pair>;
+}
+
+interface Sequence extends YAML.AST.Node {
+  items: Array<YAML.AST.Node>;
+}
+
+const isMap = (node: any): node is Map => {
+  return node.type === 'FLOW_MAP' || node.type === 'MAP';
+};
+
+const isSequence = (node: any): node is Sequence => {
+  return node.type === 'FLOW_SEQ' || node.type === 'SEQ';
+};
+
+export interface Comments {
+  [value: string]: {
+    comment: string;
+    force: boolean;
+  };
+}
+
+const copyComments = (
+  fromDoc: YAML.Document,
+  toDoc: YAML.Document,
+  addComments?: Comments
+) => {
   assertIsDefined(fromDoc.contents);
   assertIsDefined(toDoc.contents);
 
@@ -49,35 +94,6 @@ const copyComments = (fromDoc: YAML.Document, toDoc: YAML.Document) => {
     }
     // Ignore any other types
     return '';
-  };
-
-  interface Node extends YAML.AST.Node {
-    _comment_already_used_: boolean;
-  }
-
-  interface Pair extends YAML.AST.Node {
-    key: YAML.AST.ScalarNode;
-    value: YAML.AST.Node;
-  }
-
-  const isPair = (node: any): node is Pair => {
-    return node.type === 'PAIR';
-  };
-
-  interface Map extends YAML.AST.Node {
-    items: Array<Pair>;
-  }
-
-  interface Sequence extends YAML.AST.Node {
-    items: Array<YAML.AST.Node>;
-  }
-
-  const isMap = (node: any): node is Map => {
-    return node.type === 'FLOW_MAP' || node.type === 'MAP';
-  };
-
-  const isSequence = (node: any): node is Sequence => {
-    return node.type === 'FLOW_SEQ' || node.type === 'SEQ';
   };
 
   // Make dollar into an escape character:
@@ -141,7 +157,7 @@ const copyComments = (fromDoc: YAML.Document, toDoc: YAML.Document) => {
       comments[path] = node as Node;
     }
   });
-  log.info('Comments:', comments);
+  log.debug('Comments:', comments);
   // Paste
   walk(toDoc.contents, 'doc', (node, path) => {
     // Need to ensure comment is only used once since sequence nodes appear both under JSON and index
@@ -153,6 +169,15 @@ const copyComments = (fromDoc: YAML.Document, toDoc: YAML.Document) => {
       // eslint-disable-next-line no-param-reassign
       node.spaceBefore = comments[path].spaceBefore;
       comments[path]._comment_already_used_ = true;
+    } else if (isScalar(node)) {
+      // Additional comments are only added if there is no pre-existing comment
+      if (addComments) {
+        const comment = addComments[node.value.toString()];
+        if (comment && (comment.force || !node.comment)) {
+          // eslint-disable-next-line no-param-reassign
+          node.comment = ` ${comment.comment}`;
+        }
+      }
     }
   });
   // eslint-disable-next-line no-param-reassign
@@ -170,6 +195,7 @@ const copyComments = (fromDoc: YAML.Document, toDoc: YAML.Document) => {
 
 interface SaveYamlFileOptions {
   markAsChanged?: boolean;
+  comments?: Comments;
 }
 
 export const saveYamlFile = async (
@@ -186,7 +212,7 @@ export const saveYamlFile = async (
   if (fileContents) {
     const doc = YAML.parseDocument(fileContents);
     const modifiedDoc = YAML.parseDocument(YAML.stringify(modifiedObj));
-    copyComments(doc, modifiedDoc);
+    copyComments(doc, modifiedDoc, options.comments);
     if (options.markAsChanged) {
       markAsChanged(fullPath);
     }
