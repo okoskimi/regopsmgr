@@ -3,15 +3,14 @@ import elog from 'electron-log';
 
 import { setAssociation } from './model';
 import { database } from '.';
-import { ObjectSchema, defaultSchema } from '../../types/schema';
+import {
+  ObjectSchema,
+  defaultSchema,
+  extractAssociationsFromData
+} from '../../types/schema';
 import { FILE_MODEL_ID, DIR_MODEL_ID } from '../../constants/database';
 import { getGitStatus } from '../git';
-import {
-  extractAssociationsFromData,
-  canonicalPath,
-  canonicalDirname,
-  fullCanonicalPath
-} from '../files';
+import { canonicalPath, canonicalDirname, fullCanonicalPath } from '../files';
 import { loadYamlFile } from '../yaml';
 
 const log = elog.scope('services/db/files');
@@ -36,6 +35,9 @@ export const loadObjectFileToDatabase = async (
     contentObj._data = jsonObj;
     contentObj.created = new Date(gitStatus.created);
     contentObj.modified = new Date(gitStatus.modified);
+    if (!contentObj.shortId) {
+      contentObj.shortId = contentObj.id;
+    }
     const associationPromises: Array<Promise<void>> = [];
     const model = database.models[schema.$id];
     if (!model) {

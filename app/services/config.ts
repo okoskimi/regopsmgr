@@ -309,7 +309,7 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
         addSchema(jsonSchema); // Throws exception if format is wrong
       }
       // At this point the schema is known to be OK, we can store it
-      const schema = getSchema(schemaConfig); // Creates RegExp object
+      const schema = getSchema(schemaConfig); // Creates RegExp object and virtualIncludes
       schemas.byId[schemaConfig.$id] = schema;
       log.info(`storing schema under id ${schemaConfig.$id}`);
       schemas.data.push(schema);

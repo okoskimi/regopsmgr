@@ -3,8 +3,12 @@ import { Column } from 'material-table';
 import elog from 'electron-log';
 
 import { database } from '.';
-import { AssociationDataMap } from '../files';
 import { isModelWithAssociations } from './model';
+import {
+  AssociationDataMap,
+  ObjectSchema,
+  IncludeEntry
+} from '../../types/schema';
 
 const log = elog.scope('services/db/query');
 
@@ -40,40 +44,40 @@ export interface LoadResult {
 }
 
 export const loadObject = async (
-  modelId: string,
+  schema: ObjectSchema,
   id: string
 ): Promise<Model | null> => {
-  const model = database.models[modelId];
+  const model = database.models[schema.$id];
   if (!model) {
     throw new Error(`Model ${model} not found in database`);
   }
-  return model.findByPk(id);
+  return model.findByPk(id, {
+    include: schema.virtualIncludes
+  });
 };
 
 const buildQuery = (
   page: number,
   pageSize: number,
-  searchTerm: string,
-  searchColumns: Array<{ field: string }>,
-  orderBy: Column<any>,
-  orderDirection: string,
-  filters: Array<{ column: Column<any>; value: string }>,
-  rawFilter: any
+  searchTerm?: string,
+  searchColumns?: Array<{ field: string }>,
+  orderBy?: Column<any>,
+  orderDirection?: string,
+  filters?: Array<{ column: Column<any>; value: string }>,
+  rawFilter?: any,
+  includes?: Array<IncludeEntry>
 ) => {
   const query: any = {};
-  if (searchTerm) {
+  if (searchTerm && searchColumns) {
     query.where = {
       [Op.or]: []
     };
     searchColumns.forEach(column => {
-      // Search in all properties accessible to SQL (non-deep ones)
-      if (column.field.indexOf('.') < 0) {
-        query.where[Op.or].push({
-          [column.field]: {
-            [Op.like]: `%${searchTerm}%`
-          }
-        });
-      }
+      query.where[Op.or].push({
+        [column.field]: {
+          [Op.like]: `%${searchTerm}%`
+        }
+      });
     });
   }
   if (filters && filters.length > 0) {
@@ -101,6 +105,9 @@ const buildQuery = (
         }
       : rawFilter;
   }
+  if (includes) {
+    query.include = includes;
+  }
   query.limit = pageSize;
   query.offset = page * pageSize;
   if (orderBy && orderBy.field) {
@@ -123,16 +130,24 @@ const buildQuery = (
   return query;
 };
 
+/*
+ * Load data from database to table.
+ * searchColumns must contain only column names found in the table
+ * (i.e. not virtual or nested fields) - this must be checked by caller
+ * before calling the function if the field specification is dynamic.
+ */
+
 export const loadData = async (
   modelId: string,
   page: number,
   pageSize: number,
-  searchTerm: string,
-  searchColumns: Array<{ field: string }>,
-  orderBy: Column<any>,
-  orderDirection: string,
-  filters: Array<{ column: Column<any>; value: string }>,
-  rawFilter: any
+  searchTerm?: string,
+  searchColumns?: Array<{ field: string }>,
+  orderBy?: Column<any>,
+  orderDirection?: string,
+  filters?: Array<{ column: Column<any>; value: string }>,
+  rawFilter?: any,
+  includes?: Array<IncludeEntry>
 ): Promise<LoadResult> => {
   const model = database.models[modelId];
   if (!model) {
@@ -146,7 +161,8 @@ export const loadData = async (
     orderBy,
     orderDirection,
     filters,
-    rawFilter
+    rawFilter,
+    includes
   );
   const { count, rows } = await model.findAndCountAll(query);
   return {
@@ -187,12 +203,13 @@ export const loadAssociations = async (
   associationName: string,
   page: number,
   pageSize: number,
-  searchTerm: string,
-  searchColumns: Array<{ field: string }>,
-  orderBy: Column<any>,
-  orderDirection: string,
-  filters: Array<{ column: Column<any>; value: string }>,
-  rawFilter: any
+  searchTerm?: string,
+  searchColumns?: Array<{ field: string }>,
+  orderBy?: Column<any>,
+  orderDirection?: string,
+  filters?: Array<{ column: Column<any>; value: string }>,
+  rawFilter?: any,
+  includes?: Array<IncludeEntry>
 ): Promise<LoadResult> => {
   const model = database.models[modelId];
   if (!model) {
@@ -218,7 +235,8 @@ export const loadAssociations = async (
     orderBy,
     orderDirection,
     filters,
-    rawFilter
+    rawFilter,
+    includes
   );
 
   const count = await association.count(instance, query);

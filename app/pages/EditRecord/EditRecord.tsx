@@ -37,12 +37,17 @@ import { RootState } from '../../types/store';
 import {
   fullCanonicalPath,
   relativePathFromCanonical,
-  extractAssociationsFromData,
+  selectSchema
+} from '../../services/files';
+import {
+  ObjectSchema,
+  isObjectSchema,
+  defaultSchema,
   AssociationDataMap,
+  extractAssociationsFromData,
   extractAssociationsFromSchema,
   AssociationDefinition
-} from '../../services/files';
-import { ObjectSchema, isObjectSchema } from '../../types/schema';
+} from '../../types/schema';
 import { saveYamlFile, loadYamlFile, Comments } from '../../services/yaml';
 import { updateDatabase } from '../../reducers/database';
 import { loadObjectFileToDatabase } from '../../services/db/dbfiles';
@@ -154,13 +159,26 @@ const EditRecord = (props: Props) => {
     params = JSON.parse(Buffer.from(rawParams, 'base64').toString());
     log.info('Parsed params to:', params);
   } else {
-    log.info('No params provided');
+    log.error('No params provided');
+    throw new Error('EditRecord requires at least path parameter!');
   }
-  const schema = schemas.byId[params.schemaId];
+
+  if (!params.path) {
+    log.error('EditRecord requires at least path parameter!');
+    throw new Error('EditRecord requires at least path parameter!');
+  }
+
+  let schema = defaultSchema;
+  if (params.schemaId) {
+    schema = schemas.byId[params.schemaId];
+  } else {
+    schema = selectSchema(params.path, schemas);
+  }
 
   // This is run for every render but only updates data if file was changed
   // Note that it does not react to database updates, so external changes to file won't trigger update if there is no rerender
   // This prevents (not tested) form from changing in mid-edit if file is changed
+  // FIXME: On the other hand, database changes may trigger re-render since db is in props?
   useEffect(() => {
     const loadFile = async () => {
       const baseDir = pathlib.join(process.cwd(), '..', 'branchtest');
@@ -450,9 +468,6 @@ const EditRecord = (props: Props) => {
           })}
         </div>
         <div className={classes.buttons}>
-          <Button type="submit" variant="contained" color="primary">
-            Save
-          </Button>
           <Button
             variant="contained"
             onClick={() => {
@@ -460,6 +475,9 @@ const EditRecord = (props: Props) => {
             }}
           >
             Cancel
+          </Button>
+          <Button type="submit" variant="contained" color="primary">
+            Save
           </Button>
         </div>
       </Form>

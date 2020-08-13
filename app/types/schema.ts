@@ -1,3 +1,10 @@
+import { Model, ModelCtor } from 'sequelize/types';
+
+import elog from 'electron-log';
+import { database } from '../services/db';
+
+const log = elog.scope('types/schema');
+
 export interface SchemaBase {
   type: string;
   $id: string;
@@ -39,6 +46,21 @@ export const defaultSchema: Schema = {
   files: /.*/ // Note that this is not actually ever applied, it is specified here strictly for type compatibility
 };
 
+export interface DocumentSchema extends Schema {
+  type: 'document';
+  templating: string;
+  format: string;
+}
+
+export const isDocumentSchema = (schema: Schema): schema is DocumentSchema => {
+  return schema.type === 'document';
+};
+
+export interface IncludeEntry {
+  model: ModelCtor<Model>;
+  as: string;
+}
+
 export interface ObjectSchema extends Schema {
   type: 'object';
   properties: {
@@ -49,12 +71,139 @@ export interface ObjectSchema extends Schema {
   };
   uiSchema?: any;
   validation?: string;
+  virtualIncludes: Array<IncludeEntry>;
 }
 export const isObjectSchema = (schema: Schema): schema is ObjectSchema => {
   return schema.type === 'object';
 };
+
+export interface AssociationData {
+  modelId: string;
+  instances: Array<string>;
+}
+
+export interface AssociationDataMap {
+  [x: string]: AssociationData;
+}
+
+export interface DataExtractResult {
+  contentObj: any;
+  associations: AssociationDataMap;
+}
+export const extractAssociationsFromData = (
+  schema: ObjectSchema,
+  data: any,
+  removeNested = true
+): DataExtractResult => {
+  const contentObj = { ...data };
+  const associations: AssociationDataMap = {};
+  Object.keys(contentObj).forEach(key => {
+    if (schema.properties[key]) {
+      const { type } = schema.properties[key];
+      if (type === 'association') {
+        const { target } = schema.properties[key];
+        if (typeof target === 'string') {
+          associations[key] = {
+            modelId: target,
+            instances: Array.isArray(contentObj[key])
+              ? contentObj[key]
+              : [contentObj[key]]
+          };
+        } else {
+          throw new Error(
+            `Target model for association ${key} in model ${schema.$id} is not a string`
+          );
+        }
+        delete contentObj[key];
+      } else if (removeNested && (type === 'array' || type === 'object')) {
+        delete contentObj[key];
+      }
+    } else {
+      log.error(
+        `Undefined schema property ${key} on schema ${schema.name}`,
+        schema
+      );
+      throw new Error(
+        `Undefined schema property ${key} on schema ${schema.name}`
+      );
+    }
+  });
+  return {
+    contentObj,
+    associations
+  };
+};
+
+export interface AssociationDefinition {
+  target: string;
+  relationship: string;
+  maxItems?: number;
+  minItems?: number;
+}
+
+export interface SchemaExtractResult {
+  contentSchema: ObjectSchema;
+  associationNames: Array<string>;
+  associationByName: {
+    [name: string]: AssociationDefinition;
+  };
+}
+
+export interface SchemaConfigExtractResult {
+  contentSchema: ObjectSchemaConfig;
+  associationNames: Array<string>;
+  associationByName: {
+    [name: string]: AssociationDefinition;
+  };
+}
+
+type ExtractAssociationFunction = {
+  (schema: ObjectSchema): SchemaExtractResult;
+  (schema: ObjectSchemaConfig): SchemaConfigExtractResult;
+};
+
+export const extractAssociationsFromSchema: ExtractAssociationFunction = (
+  schema: any
+): any => {
+  const result: any = {
+    // Need to create a copy of schema.properties since they get removed
+    contentSchema: { ...schema, properties: { ...schema.properties } },
+    associationNames: [],
+    associationByName: {}
+  };
+  Object.keys(result.contentSchema.properties).forEach(key => {
+    const { type, target } = result.contentSchema.properties[key];
+    if (type === 'association' && typeof target === 'string') {
+      result.associationNames.push(key);
+      result.associationByName[key] = (result.contentSchema.properties[
+        key
+      ] as unknown) as AssociationDefinition;
+      delete result.contentSchema.properties[key];
+    }
+  });
+  return result;
+};
+
 export const getSchema = (config: SchemaConfig): Schema => {
   if (isObjectSchemaConfig(config)) {
+    const {
+      associationNames,
+      associationByName
+    } = extractAssociationsFromSchema(config);
+    const virtualIncludes: Array<IncludeEntry> = [];
+    Object.keys(config.properties).forEach(key => {
+      if (config.properties[key].virtual) {
+        (config.properties[key].parameters as Array<string>).forEach(param => {
+          if (associationNames.includes(param)) {
+            virtualIncludes.push({
+              model: database.models[associationByName[param].target],
+              as: param
+            });
+          }
+        });
+      }
+    });
+    log.debug('Adding virtual includes:', virtualIncludes);
     const os: ObjectSchema = {
       ...config,
       properties: {
@@ -70,7 +219,8 @@ export const getSchema = (config: SchemaConfig): Schema => {
         shortId: { type: 'string', maxLength: 255, readOnly: true }, // ReadOnly is just for UI purposes
         name: { type: 'string', maxLength: 255 }
       },
-      files: new RegExp(config.files)
+      files: new RegExp(config.files),
+      virtualIncludes
     };
     return os;
   }

@@ -5,7 +5,7 @@ import pathlib from 'path';
 import elog from 'electron-log';
 
 import { Notifier } from './notifications';
-import { Schema, isObjectSchema } from '../types/schema';
+import { isObjectSchema } from '../types/schema';
 import {
   Dispatch,
   RootState,
@@ -21,7 +21,7 @@ import {
   removeFileFromDatabase,
   removeDirectoryFromDatabase
 } from '../services/db/dbfiles';
-import { wasChanged } from '../services/files';
+import { wasChanged, selectSchema } from '../services/files';
 
 const log = elog.scope('reducers/database');
 
@@ -92,18 +92,6 @@ export const initDatabase = (
       notify.error(`Unable to initialize database: ${error}`);
     }
   };
-};
-
-const selectSchema = (
-  path: string,
-  schemas: SchemaState
-): Schema | undefined => {
-  for (const schema of schemas.data) {
-    if (schema.files.test(path)) {
-      return schema;
-    }
-  }
-  return undefined;
 };
 
 export const loadFilesToDatabase = (

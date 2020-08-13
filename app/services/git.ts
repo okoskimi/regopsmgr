@@ -50,11 +50,13 @@ export const getGitStatus = async (
         oid: commit.oid,
         filepath: path
       });
+      /*
       log.silly(
         `Found file in git commit at ${new Date(
           commit.commit.committer.timestamp * 1000
         )}`
       );
+      */
       if (i === commits.length - 1) {
         // file already existed in first commit
         adjustStatusTimestamps(statusResult, commit);

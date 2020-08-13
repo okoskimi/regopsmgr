@@ -1,7 +1,8 @@
 import pathlib from 'path';
 import elog from 'electron-log';
 
-import { ObjectSchema } from '../types/schema';
+import { Schema, defaultSchema } from '../types/schema';
+import { SchemaState } from '../types/store';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const log = elog.scope('services/db/files');
@@ -57,98 +58,13 @@ export const relativePathFromCanonical = (path: string): string => {
   return path.startsWith('/') ? path.substring(1) : path;
 };
 
-export interface AssociationData {
-  modelId: string;
-  instances: Array<string>;
-}
-
-export interface AssociationDataMap {
-  [x: string]: AssociationData;
-}
-
-export interface DataExtractResult {
-  contentObj: any;
-  associations: AssociationDataMap;
-}
-export const extractAssociationsFromData = (
-  schema: ObjectSchema,
-  data: any,
-  removeNested = true
-): DataExtractResult => {
-  const contentObj = { ...data };
-  const associations: AssociationDataMap = {};
-  Object.keys(contentObj).forEach(key => {
-    if (schema.properties[key]) {
-      const { type } = schema.properties[key];
-      if (type === 'association') {
-        const { target } = schema.properties[key];
-        if (typeof target === 'string') {
-          associations[key] = {
-            modelId: target,
-            instances: Array.isArray(contentObj[key])
-              ? contentObj[key]
-              : [contentObj[key]]
-          };
-        } else {
-          throw new Error(
-            `Target model for association ${key} in model ${schema.$id} is not a string`
-          );
-        }
-        delete contentObj[key];
-      } else if (removeNested && (type === 'array' || type === 'object')) {
-        delete contentObj[key];
-      }
-    } else {
-      log.error(
-        `Undefined schema property ${key} on schema ${schema.name}`,
-        schema
-      );
-      throw new Error(
-        `Undefined schema property ${key} on schema ${schema.name}`
-      );
+export const selectSchema = (path: string, schemas: SchemaState): Schema => {
+  for (const schema of schemas.data) {
+    if (schema.files.test(path)) {
+      return schema;
     }
-  });
-  return {
-    contentObj,
-    associations
-  };
-};
-
-export interface AssociationDefinition {
-  target: string;
-  relationship: string;
-  maxItems?: number;
-  minItems?: number;
-}
-
-export interface SchemaExtractResult {
-  contentSchema: ObjectSchema;
-  associationNames: Array<string>;
-  associationByName: {
-    [name: string]: AssociationDefinition;
-  };
-}
-
-export const extractAssociationsFromSchema = (
-  schema: ObjectSchema
-): SchemaExtractResult => {
-  const result: SchemaExtractResult = {
-    // Need to create a copy of schema.properties since they get removed
-    contentSchema: { ...schema, properties: { ...schema.properties } },
-    associationNames: [],
-    associationByName: {}
-  };
-  Object.keys(result.contentSchema.properties).forEach(key => {
-    const { type, target } = result.contentSchema.properties[key];
-    if (type === 'association' && typeof target === 'string') {
-      result.associationNames.push(key);
-      result.associationByName[key] = (result.contentSchema.properties[
-        key
-      ] as unknown) as AssociationDefinition;
-      delete result.contentSchema.properties[key];
-    }
-  });
-  return result;
+  }
+  return defaultSchema;
 };
 
 export default {};

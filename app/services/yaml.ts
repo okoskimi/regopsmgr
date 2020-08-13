@@ -240,15 +240,29 @@ export const loadYamlFile = async (
   const contentObj = YAML.parse(contentStr);
   if (options.forceId && !contentObj.id) {
     // Force ID to be first property so that it is first in YAML file
+    const id = uuidv4();
     const yamlData = {
-      id: uuidv4(),
+      id,
+      shortId: id,
       ...contentObj
     };
-    log.info('Saving ID to ', fullPath);
+    log.info('Saving id and shortId to ', fullPath);
     await saveYamlFile(fullPath, yamlData, {
       markAsChanged: !!options.markAsChanged
     });
-    contentObj.id = yamlData.id;
+    contentObj.id = id;
+    contentObj.shortId = id;
+  } else if (options.forceId && !contentObj.shortId) {
+    const yamlData = {
+      id: contentObj.id,
+      shortId: contentObj.id,
+      ...contentObj
+    };
+    log.info('Saving shortId to ', fullPath);
+    await saveYamlFile(fullPath, yamlData, {
+      markAsChanged: !!options.markAsChanged
+    });
+    contentObj.shortId = contentObj.id;
   }
   if (options.schemaId) {
     const [success, errors] = validateType(options.schemaId, contentObj);

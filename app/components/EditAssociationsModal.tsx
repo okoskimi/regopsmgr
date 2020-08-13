@@ -288,9 +288,7 @@ const EditAssociationsModal = (props: Props) => {
         />
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleCancel} color="primary">
-          Cancel
-        </Button>
+        <Button onClick={handleCancel}>Cancel</Button>
         <Button
           onClick={handleSave}
           color="primary"
