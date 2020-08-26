@@ -7,7 +7,7 @@
 import React, { forwardRef, useState, useEffect } from 'react';
 import { ConnectedProps, connect } from 'react-redux';
 import { useParams, useHistory } from 'react-router-dom';
-import MaterialTable, { Action, Icons } from 'material-table';
+import MaterialTable, { Icons } from 'material-table';
 import elog from 'electron-log';
 
 import {
@@ -34,10 +34,7 @@ import ViewColumn from '@material-ui/icons/ViewColumn';
 
 import { RootState } from '../../types/store';
 import { loadData, convertFilter } from '../../services/db/query';
-import {
-  isObjectSchema,
-  extractAssociationsFromSchema
-} from '../../types/schema';
+import { isObjectSchema } from '../../types/schema';
 
 const log = elog.scope('pages/RecordTable');
 
@@ -95,22 +92,6 @@ const RecordTable = (props: Props) => {
   log.debug('Database version:', db.version);
   log.debug('Render version:', renderVersion);
 
-  useEffect(() => {
-    if (db.version !== renderVersion) {
-      log.debug('Updating table');
-      if (tableRef.current) {
-        log.debug('calling onQueryChange');
-        tableRef.current.onQueryChange();
-        log.debug('onQueryChange called');
-      } else {
-        log.debug('No tableRef:', tableRef.current);
-      }
-      log.debug('Setting render version');
-      setRenderVersion(db.version);
-      log.debug('Set render version');
-    }
-  });
-
   let params: any = {};
   if (rawParams !== undefined) {
     log.info('We got params:', rawParams);
@@ -122,6 +103,25 @@ const RecordTable = (props: Props) => {
   } else {
     log.info('No params provided');
   }
+
+  const [renderSchemaId, setRenderSchemaId] = useState(params.schemaId);
+  useEffect(() => {
+    if (db.version !== renderVersion || params.schemaId !== renderSchemaId) {
+      log.debug('Updating table');
+      if (tableRef.current) {
+        log.debug('calling onQueryChange');
+        tableRef.current.onQueryChange();
+        log.debug('onQueryChange called');
+      } else {
+        log.debug('No tableRef:', tableRef.current);
+      }
+      log.debug('Setting render version and model');
+      setRenderVersion(db.version);
+      setRenderSchemaId(params.schemaId);
+      log.debug('Set render version');
+    }
+  });
+
   if (!params.title) {
     params.title = 'Files';
   }
@@ -153,29 +153,26 @@ const RecordTable = (props: Props) => {
       { title: 'Path', field: 'path' }
     ];
   } else {
-    // Fix column names for nested properties that are not includes to point within the _data object
-    // Also, disable filtering for columns that use nested properties
+    // Disable filtering for columns that use nested properties
     // TBD: Association nested properties could technically be handled by SQL if they are not nested within the
     // associated object
-    const { associationNames } = extractAssociationsFromSchema(schema);
+    // const { associationNames } = extractAssociationsFromSchema(schema);
     params.columns = params.columns.map((column: any) => {
       const dotPosition = column.field.indexOf('.');
       if (dotPosition < 0) {
         return column;
       }
+      /*
       const columnName = column.field.substring(0, dotPosition);
       if (associationNames.includes(columnName)) {
-        return { ...column, filtering: false };
+        ...association based filtering...
       }
-      return { ...column, filtering: false, field: `_data.${column.field}` };
+      */
+      return { ...column, filtering: false };
     });
   }
   // TODO: Implement lookup configuration in columns based on enumNames
   log.info('Columns:', params.columns);
-
-  // FIXME NOW: MaterialTable does not detect change of query parameters, MUST save query parameters and
-  // trigger onQueryChange (see useEffect) manually when the parameters have changed.
-  // Just extend the useEffect.
 
   // const { notifications, markAllAsSeen } = props;
   return (
@@ -204,26 +201,18 @@ const RecordTable = (props: Props) => {
         }}
         title={params.title}
         options={{ filtering: true }}
-        actions={[
-          (_rowData: any): Action<any> => {
-            return {
-              icon: Edit,
-              tooltip: 'Edit Record',
-              onClick: (event, eventRowData) => {
-                const linkParams = {
-                  schemaId: schema.$id,
-                  path: eventRowData.path,
-                  uiSchema: params.uiSchema // May be undefined
-                };
-                history.push(
-                  `/EditRecord/${Buffer.from(
-                    JSON.stringify(linkParams)
-                  ).toString('base64')}`
-                );
-              }
-            };
-          }
-        ]}
+        onRowClick={(event, eventRowData: any) => {
+          const linkParams = {
+            schemaId: schema.$id,
+            path: eventRowData.path,
+            uiSchema: params.uiSchema // May be undefined
+          };
+          history.push(
+            `/EditRecord/${Buffer.from(JSON.stringify(linkParams)).toString(
+              'base64'
+            )}`
+          );
+        }}
       />
     </div>
   );

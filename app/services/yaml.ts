@@ -3,6 +3,7 @@ import YAML from 'yaml';
 import { Scalar } from 'yaml/types';
 import { v4 as uuidv4 } from 'uuid';
 import elog from 'electron-log';
+import lodash from 'lodash';
 
 import { assertIsDefined } from '../types/util';
 import { validateType, validateSchema } from '../types/validation';
@@ -171,7 +172,7 @@ const copyComments = (
       comments[path]._comment_already_used_ = true;
     } else if (isScalar(node)) {
       // Additional comments are only added if there is no pre-existing comment
-      if (addComments) {
+      if (addComments && node.value) {
         const comment = addComments[node.value.toString()];
         if (comment && (comment.force || !node.comment)) {
           // eslint-disable-next-line no-param-reassign
@@ -209,9 +210,20 @@ export const saveYamlFile = async (
   } catch (error) {
     log.error('Error loading old data', error);
   }
+
+  log.info('Saving data:', fullPath, modifiedObj);
   if (fileContents) {
     const doc = YAML.parseDocument(fileContents);
-    const modifiedDoc = YAML.parseDocument(YAML.stringify(modifiedObj));
+    // Force id, shortId and name first, then original order
+    const orderedData = lodash.merge(doc.toJSON(), modifiedObj);
+    const modifiedDoc = YAML.parseDocument(
+      YAML.stringify({
+        id: modifiedObj.id,
+        shortId: modifiedObj.shortId || modifiedObj.id,
+        name: modifiedObj.name || '',
+        ...orderedData
+      })
+    );
     copyComments(doc, modifiedDoc, options.comments);
     if (options.markAsChanged) {
       markAsChanged(fullPath);
@@ -221,7 +233,16 @@ export const saveYamlFile = async (
     if (options.markAsChanged) {
       markAsChanged(fullPath);
     }
-    await fsp.writeFile(fullPath, YAML.stringify(modifiedObj));
+    // Force id, shortId and name first
+    await fsp.writeFile(
+      fullPath,
+      YAML.stringify({
+        id: modifiedObj.id,
+        shortId: modifiedObj.shortId || modifiedObj.id,
+        name: modifiedObj.name || '',
+        ...modifiedObj
+      })
+    );
   }
 };
 
@@ -238,12 +259,14 @@ export const loadYamlFile = async (
 ): Promise<any> => {
   const contentStr = await fsp.readFile(fullPath, { encoding: 'utf8' });
   const contentObj = YAML.parse(contentStr);
+  log.info('LoadYamlFile', fullPath, options, contentObj);
   if (options.forceId && !contentObj.id) {
-    // Force ID to be first property so that it is first in YAML file
+    // Force first properties in YAML file
     const id = uuidv4();
     const yamlData = {
       id,
       shortId: id,
+      name: contentObj.name || '',
       ...contentObj
     };
     log.info('Saving id and shortId to ', fullPath);

@@ -25,19 +25,23 @@ export const loadObjectFileToDatabase = async (
     log.info(`Loading file ${path} of type ${schema.name}`);
     const jsonObj = await loadYamlFile(fullPath, {
       schemaId: schema.$id,
-      markAsChanged: true
+      markAsChanged: true,
+      forceId: true // Forces both id and shortId
     });
     const { contentObj, associations } = extractAssociationsFromData(
       schema,
       jsonObj
     );
     const gitStatus = await getGitStatus(path, gitDir);
-    contentObj._data = jsonObj;
+    contentObj.path = canonicalPath(path);
     contentObj.created = new Date(gitStatus.created);
     contentObj.modified = new Date(gitStatus.modified);
+    /*
+     * Unnecessary since forceId is set to true
     if (!contentObj.shortId) {
       contentObj.shortId = contentObj.id;
     }
+    */
     const associationPromises: Array<Promise<void>> = [];
     const model = database.models[schema.$id];
     if (!model) {

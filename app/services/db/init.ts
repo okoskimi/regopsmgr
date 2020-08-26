@@ -62,12 +62,9 @@ export const initDatabase = async (configs: ConfigFileState) => {
             type: DataTypes.UUID,
             defaultValue: DataTypes.UUIDV4
           },
-          _data: {
-            type: DataTypes.JSON,
-            allowNull: false
-          },
           shortId: COLLATED_STRING,
           name: COLLATED_STRING,
+          path: COLLATED_STRING,
           created: DataTypes.DATE,
           modified: DataTypes.DATE
         };
@@ -109,7 +106,7 @@ export const initDatabase = async (configs: ConfigFileState) => {
             params = parameters.filter(
               param => !associationNames.includes(param)
             );
-            // Must not use arrow function because this works differently for them
+            // Must not use arrow function because "this" keyword works differently for them
             // eslint-disable-next-line func-names
             getFunction = function(this: Model) {
               // eslint-disable-next-line @typescript-eslint/no-this-alias
@@ -229,7 +226,7 @@ export const initDatabase = async (configs: ConfigFileState) => {
               });
               break;
             case 'object':
-              // No effect on the model
+              model[key] = DataTypes.JSON;
               if (prop.virtual) {
                 throw new Error(
                   `Virtual object properties are not supported for objects (${key} in ${filepath})`
@@ -242,15 +239,15 @@ export const initDatabase = async (configs: ConfigFileState) => {
               }
               break;
             case 'array':
-              // No effect on the model
+              model[key] = DataTypes.JSON;
               if (prop.virtual) {
                 throw new Error(
-                  `Virtual array properties are not supported for objects (${key} in ${filepath})`
+                  `Virtual array properties are not supported for arrays (${key} in ${filepath})`
                 );
               }
               if (prop.index === true) {
                 throw new Error(
-                  `Indexes are not supported for objects (${key} in ${filepath})`
+                  `Indexes are not supported for arrays (${key} in ${filepath})`
                 );
               }
               break;

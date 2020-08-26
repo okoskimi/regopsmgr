@@ -231,12 +231,12 @@ export const loadSchemas = (configs: ConfigFileState): SchemaState => {
             'id' in properties ||
             'shortId' in properties ||
             'name' in properties ||
+            'path' in properties ||
             'created' in properties ||
-            'modified' in properties ||
-            '_data' in properties
+            'modified' in properties
           ) {
             throw new Error(
-              `Schema ${filepath} uses reserved properties (id, shortId, name, created, modified or _data)`
+              `Schema ${filepath} uses reserved properties (id, shortId, name, path, created, or modified)`
             );
           }
           // Set reserved properties.

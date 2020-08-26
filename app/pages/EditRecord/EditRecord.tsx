@@ -232,7 +232,7 @@ const EditRecord = (props: Props) => {
   });
 
   if (!params.title) {
-    params.title = 'Files';
+    params.title = schema.name;
   }
 
   const defaultAssociationColumns = [
@@ -329,7 +329,7 @@ const EditRecord = (props: Props) => {
 
   return (
     <div className={classes.root}>
-      <h2>{`Edit ${schema.name}`}</h2>
+      <h2>{params.title}</h2>
       <Form
         schema={recordSchema.contentSchema as any}
         formData={recordData.contentObj}
@@ -474,7 +474,7 @@ const EditRecord = (props: Props) => {
               history.goBack();
             }}
           >
-            Cancel
+            Back
           </Button>
           <Button type="submit" variant="contained" color="primary">
             Save
