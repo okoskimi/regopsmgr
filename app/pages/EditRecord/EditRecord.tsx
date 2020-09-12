@@ -191,8 +191,7 @@ const EditRecord = (props: Props) => {
         });
         const { contentObj, associations } = extractAssociationsFromData(
           schema,
-          rawContent,
-          false
+          rawContent
         );
         const {
           contentSchema,

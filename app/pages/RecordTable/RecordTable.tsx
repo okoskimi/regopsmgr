@@ -34,7 +34,10 @@ import ViewColumn from '@material-ui/icons/ViewColumn';
 
 import { RootState } from '../../types/store';
 import { loadData, convertFilter } from '../../services/db/query';
-import { isObjectSchema } from '../../types/schema';
+import {
+  isObjectSchema,
+  getNonFilterableFieldsFromSchema
+} from '../../types/schema';
 
 const log = elog.scope('pages/RecordTable');
 
@@ -156,18 +159,12 @@ const RecordTable = (props: Props) => {
     // Disable filtering for columns that use nested properties
     // TBD: Association nested properties could technically be handled by SQL if they are not nested within the
     // associated object
-    // const { associationNames } = extractAssociationsFromSchema(schema);
+    const nonFilterable = getNonFilterableFieldsFromSchema(schema);
     params.columns = params.columns.map((column: any) => {
       const dotPosition = column.field.indexOf('.');
-      if (dotPosition < 0) {
+      if (dotPosition < 0 && !nonFilterable.includes(column.field)) {
         return column;
       }
-      /*
-      const columnName = column.field.substring(0, dotPosition);
-      if (associationNames.includes(columnName)) {
-        ...association based filtering...
-      }
-      */
       return { ...column, filtering: false };
     });
   }

@@ -12,6 +12,28 @@ import {
 
 const log = elog.scope('services/db/query');
 
+export const dumpDatabase = async (): Promise<void> => {
+  log.debug('================ DUMPING DATABASE ===============');
+  const promises: {
+    [model: string]: Promise<Array<Model>>;
+  } = {};
+  Object.keys(database.models).forEach(modelName => {
+    promises[modelName] = database.models[modelName].findAll();
+  });
+  await Promise.all(Object.values(promises));
+  Object.keys(promises).forEach(modelName => {
+    log.debug(`**************** ${modelName} *************`);
+    promises[modelName]
+      .then(values => {
+        values.forEach(value => {
+          log.debug(`  - ${value.get('name')}: ${JSON.stringify(value.get())}`);
+        });
+        return null;
+      })
+      .catch(error => log.error(error));
+  });
+};
+
 export const convertFilter = (filter: any): any => {
   if (Array.isArray(filter)) {
     return filter.map(item => convertFilter(item));
@@ -37,6 +59,13 @@ export const convertFilter = (filter: any): any => {
   return filter;
 };
 
+export const getVirtualIncludes = (includes: Array<IncludeEntry>) => {
+  return includes.map(include => ({
+    model: database.models[include.model],
+    as: include.as
+  }));
+};
+
 export interface LoadResult {
   data: Array<any>;
   page: number;
@@ -52,7 +81,7 @@ export const loadObject = async (
     throw new Error(`Model ${model} not found in database`);
   }
   return model.findByPk(id, {
-    include: schema.virtualIncludes
+    include: getVirtualIncludes(schema.virtualIncludes)
   });
 };
 
@@ -106,7 +135,7 @@ const buildQuery = (
       : rawFilter;
   }
   if (includes) {
-    query.include = includes;
+    query.include = getVirtualIncludes(includes);
   }
   query.limit = pageSize;
   query.offset = page * pageSize;

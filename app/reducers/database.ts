@@ -22,6 +22,7 @@ import {
   removeDirectoryFromDatabase
 } from '../services/db/dbfiles';
 import { wasChanged, selectSchema } from '../services/files';
+import { dumpDatabase } from '../services/db/query';
 
 const log = elog.scope('reducers/database');
 
@@ -216,6 +217,7 @@ export const loadFilesToDatabase = (
           });
 
           dispatch(databaseReady());
+          dumpDatabase();
           log.info(`Loaded ${successCount} files to database`);
           notify.success(`Loaded ${successCount} files to database`);
           if (failureCount > 0) {

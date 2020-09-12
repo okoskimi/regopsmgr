@@ -1,7 +1,4 @@
-import { Model, ModelCtor } from 'sequelize/types';
-
 import elog from 'electron-log';
-import { database } from '../services/db';
 
 const log = elog.scope('types/schema');
 
@@ -57,7 +54,7 @@ export const isDocumentSchema = (schema: Schema): schema is DocumentSchema => {
 };
 
 export interface IncludeEntry {
-  model: ModelCtor<Model>;
+  model: string; // ModelCtor<Model>;
   as: string;
 }
 
@@ -92,8 +89,7 @@ export interface DataExtractResult {
 }
 export const extractAssociationsFromData = (
   schema: ObjectSchema,
-  data: any,
-  removeNested = true
+  data: any
 ): DataExtractResult => {
   const contentObj = { ...data };
   const associations: AssociationDataMap = {};
@@ -114,8 +110,6 @@ export const extractAssociationsFromData = (
             `Target model for association ${key} in model ${schema.$id} is not a string`
           );
         }
-        delete contentObj[key];
-      } else if (removeNested && (type === 'array' || type === 'object')) {
         delete contentObj[key];
       }
     } else {
@@ -184,6 +178,19 @@ export const extractAssociationsFromSchema: ExtractAssociationFunction = (
   return result;
 };
 
+export const getNonFilterableFieldsFromSchema = (
+  schema: any
+): Array<string> => {
+  const result: Array<string> = [];
+  Object.keys(schema.properties).forEach(key => {
+    const { type, virtual } = schema.properties[key];
+    if (virtual || type === 'array' || type === 'object') {
+      result.push(key);
+    }
+  });
+  return result;
+};
+
 export const getSchema = (config: SchemaConfig): Schema => {
   if (isObjectSchemaConfig(config)) {
     const {
@@ -196,7 +203,7 @@ export const getSchema = (config: SchemaConfig): Schema => {
         (config.properties[key].parameters as Array<string>).forEach(param => {
           if (associationNames.includes(param)) {
             virtualIncludes.push({
-              model: database.models[associationByName[param].target],
+              model: associationByName[param].target,
               as: param
             });
           }

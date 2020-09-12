@@ -20,8 +20,13 @@ import { Button } from '@material-ui/core';
 
 import { RootState } from '../../types/store';
 import { fullCanonicalPath, selectSchema } from '../../services/files';
-import { isDocumentSchema, defaultSchema } from '../../types/schema';
+import {
+  isDocumentSchema,
+  defaultSchema,
+  isObjectSchema
+} from '../../types/schema';
 import { database } from '../../services/db';
+import { getVirtualIncludes } from '../../services/db/query';
 
 const log = elog.scope('pages/ViewDocument');
 
@@ -121,8 +126,67 @@ const ViewDocument = (props: Props) => {
         const baseDir = pathlib.join(process.cwd(), '..', 'branchtest');
         const fullPath = fullCanonicalPath(baseDir, params.path);
         // const ejsInput = `<%- include(${fullPath});%>`;
+        const models: any = {};
+        const addVirtualIncludes = (options: any, schemaId: string) => {
+          const includeSchema = schemas.byId[schemaId];
+          if (isObjectSchema(includeSchema)) {
+            log.info(
+              `Virtual includes: ${JSON.stringify(
+                includeSchema.virtualIncludes
+              )}`
+            );
+            const newOptions = { ...options };
+            if (options.include) {
+              newOptions.include = options.include.concat(
+                getVirtualIncludes(includeSchema.virtualIncludes)
+              );
+            } else {
+              newOptions.include = getVirtualIncludes(
+                includeSchema.virtualIncludes
+              );
+            }
+            return newOptions;
+          }
+          return options;
+        };
+        Object.keys(database.models).forEach(key => {
+          models[key] = Object.create(database.models[key]);
+          const model = models[key];
+          model.findAll = async (options: any) => {
+            log.info(`Document findAll: ${JSON.stringify(options)}`);
+            log.info(
+              `Augmented options: ${JSON.stringify(
+                addVirtualIncludes(options, key)
+              )}`
+            );
+            try {
+              log.info('Making query');
+              const result = await Object.getPrototypeOf(model).findAll(
+                addVirtualIncludes(options, key)
+              );
+              log.info('Got result: ', result);
+              return result;
+            } catch (error) {
+              log.error('Document query failed', error);
+              return undefined;
+            }
+          };
+          model.findAndCountAll = (options: any) =>
+            Object.getPrototypeOf(model).findAndCountAll(
+              addVirtualIncludes(options, key)
+            );
+          model.findByPk = (param: any, options: any) =>
+            Object.getPrototypeOf(model).findByPk(
+              param,
+              addVirtualIncludes(options, key)
+            );
+          model.findOne = (options: any) =>
+            Object.getPrototypeOf(model).findOne(
+              addVirtualIncludes(options, key)
+            );
+        });
         try {
-          const ejsOutput = await ejs.renderFile(fullPath, database.models, {
+          const ejsOutput = await ejs.renderFile(fullPath, models, {
             async: true
           });
           console.log('EJS output:', ejsOutput);

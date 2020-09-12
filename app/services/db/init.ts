@@ -17,6 +17,7 @@ import { database } from '.';
 import { addAssociation } from './model';
 
 const log = elog.scope('services/db/init');
+const virtualLog = elog.scope('services/db/virtual');
 
 // Set SQLite specific collation hack
 const COLLATED_STRING = `${DataTypes.STRING} COLLATE NOCASE`;
@@ -103,6 +104,7 @@ export const initDatabase = async (configs: ConfigFileState) => {
               );
             }
             // Remove from parameters properties that are associations
+            // Sequelize does not support association dependencies natively
             params = parameters.filter(
               param => !associationNames.includes(param)
             );
@@ -119,8 +121,12 @@ export const initDatabase = async (configs: ConfigFileState) => {
                   [cur]: that.get(cur)
                 };
               }, {});
+              context.log = virtualLog;
               log.info('Doing safeEval with context:', context);
-              return safeEval(virtual, context);
+              const wrappedVirtual = `
+                function () { try { return ${virtual} } catch(ex) { log.error(ex); return undefined; } }()
+              `;
+              return safeEval(wrappedVirtual, context);
             };
             // eslint-disable-next-line func-names
             setFunction = function() {
