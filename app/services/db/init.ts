@@ -8,7 +8,7 @@ import {
   Schema,
   getSchema,
   isObjectSchema,
-  extractAssociationsFromSchema
+  extractAssociationsAndVirtualsFromSchema
 } from '../../types/schema';
 import { isSchemaConfigFile } from '../../types/config';
 import { ConfigFileState } from '../../types/store';
@@ -85,7 +85,9 @@ export const initDatabase = async (configs: ConfigFileState) => {
             }
           ]
         };
-        const { associationNames } = extractAssociationsFromSchema(schema);
+        const { associationNames } = extractAssociationsAndVirtualsFromSchema(
+          schema
+        );
         Object.keys(schema.properties).forEach(key => {
           if (key === 'id') {
             return; // This was already added in model initialization

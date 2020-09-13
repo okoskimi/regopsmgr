@@ -6,7 +6,7 @@ import { database } from '.';
 import {
   ObjectSchema,
   defaultSchema,
-  extractAssociationsFromData
+  extractAssociationsAndVirtualsFromData
 } from '../../types/schema';
 import { FILE_MODEL_ID, DIR_MODEL_ID } from '../../constants/database';
 import { getGitStatus } from '../git';
@@ -28,7 +28,7 @@ export const loadObjectFileToDatabase = async (
       markAsChanged: true,
       forceId: true // Forces both id and shortId
     });
-    const { contentObj, associations } = extractAssociationsFromData(
+    const { contentObj, associations } = extractAssociationsAndVirtualsFromData(
       schema,
       jsonObj
     );

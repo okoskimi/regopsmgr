@@ -44,8 +44,8 @@ import {
   isObjectSchema,
   defaultSchema,
   AssociationDataMap,
-  extractAssociationsFromData,
-  extractAssociationsFromSchema,
+  extractAssociationsAndVirtualsFromData,
+  extractAssociationsAndVirtualsFromSchema,
   AssociationDefinition
 } from '../../types/schema';
 import { saveYamlFile, loadYamlFile, Comments } from '../../services/yaml';
@@ -189,15 +189,15 @@ const EditRecord = (props: Props) => {
           schemaId: schema.$id,
           markAsChanged: true
         });
-        const { contentObj, associations } = extractAssociationsFromData(
-          schema,
-          rawContent
-        );
+        const {
+          contentObj,
+          associations
+        } = extractAssociationsAndVirtualsFromData(schema, rawContent);
         const {
           contentSchema,
           associationNames,
           associationByName
-        } = extractAssociationsFromSchema(schema);
+        } = extractAssociationsAndVirtualsFromSchema(schema);
         log.info('Setting tableRefs');
         const refs: TableRefMap = {};
         associationNames.forEach(name => {

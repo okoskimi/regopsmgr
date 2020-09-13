@@ -87,7 +87,7 @@ export interface DataExtractResult {
   contentObj: any;
   associations: AssociationDataMap;
 }
-export const extractAssociationsFromData = (
+export const extractAssociationsAndVirtualsFromData = (
   schema: ObjectSchema,
   data: any
 ): DataExtractResult => {
@@ -95,7 +95,7 @@ export const extractAssociationsFromData = (
   const associations: AssociationDataMap = {};
   Object.keys(contentObj).forEach(key => {
     if (schema.properties[key]) {
-      const { type } = schema.properties[key];
+      const { type, virtual } = schema.properties[key];
       if (type === 'association') {
         const { target } = schema.properties[key];
         if (typeof target === 'string') {
@@ -110,6 +110,9 @@ export const extractAssociationsFromData = (
             `Target model for association ${key} in model ${schema.$id} is not a string`
           );
         }
+        delete contentObj[key];
+      }
+      if (virtual) {
         delete contentObj[key];
       }
     } else {
@@ -156,7 +159,7 @@ type ExtractAssociationFunction = {
   (schema: ObjectSchemaConfig): SchemaConfigExtractResult;
 };
 
-export const extractAssociationsFromSchema: ExtractAssociationFunction = (
+export const extractAssociationsAndVirtualsFromSchema: ExtractAssociationFunction = (
   schema: any
 ): any => {
   const result: any = {
@@ -166,12 +169,15 @@ export const extractAssociationsFromSchema: ExtractAssociationFunction = (
     associationByName: {}
   };
   Object.keys(result.contentSchema.properties).forEach(key => {
-    const { type, target } = result.contentSchema.properties[key];
+    const { type, target, virtual } = result.contentSchema.properties[key];
     if (type === 'association' && typeof target === 'string') {
       result.associationNames.push(key);
       result.associationByName[key] = (result.contentSchema.properties[
         key
       ] as unknown) as AssociationDefinition;
+      delete result.contentSchema.properties[key];
+    }
+    if (virtual) {
       delete result.contentSchema.properties[key];
     }
   });
@@ -196,7 +202,7 @@ export const getSchema = (config: SchemaConfig): Schema => {
     const {
       associationNames,
       associationByName
-    } = extractAssociationsFromSchema(config);
+    } = extractAssociationsAndVirtualsFromSchema(config);
     const virtualIncludes: Array<IncludeEntry> = [];
     Object.keys(config.properties).forEach(key => {
       if (config.properties[key].virtual) {
